@@ -222,6 +222,8 @@ function addTransaction(e) {
     form.reset();
     // 날짜는 오늘 날짜로 다시 설정
     dateInput.value = new Date().toISOString().slice(0, 10);
+    // 폼 리셋 후 카테고리 옵션을 다시 업데이트
+    updateCategoryOptions();
 }
 
 /**
