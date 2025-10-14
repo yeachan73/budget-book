@@ -33,8 +33,12 @@ const transactionList = document.getElementById('transaction-list');
 
 const assetForm = document.getElementById('asset-form');
 const assetNameInput = document.getElementById('asset-name');
+const assetTypeInput = document.getElementById('asset-type');
 const initialBalanceInput = document.getElementById('initial-balance');
 const assetList = document.getElementById('asset-list');
+const creditCardFields = document.getElementById('credit-card-fields');
+const paymentDayInput = document.getElementById('payment-day');
+const linkedAccountSelect = document.getElementById('linked-account-select');
 
 // 모달 관련 DOM 요소
 const assetEditModal = document.getElementById('asset-edit-modal');
@@ -95,21 +99,38 @@ function renderAssets(assets) {
     }
 
     Object.keys(assets).forEach(key => {
-        const asset = assets[key];
+        const paymentMethod = assets[key];
 
         // 자산 현황 목록에 아이템 추가
         const li = document.createElement('li');
-        li.innerHTML = `
-            <span class="asset-name" data-id="${key}" data-name="${asset.name}">${asset.name}</span>
-            <span class="asset-balance">${Number(asset.balance).toLocaleString()}원</span>
-        `;
+        let detailsHtml = '';
+        let balanceHtml = '';
+
+        if (paymentMethod.type === 'credit_card') {
+            detailsHtml = `<span class="asset-details">(결제예정: ${Number(paymentMethod.pendingAmount || 0).toLocaleString()}원)</span>`;
+            balanceHtml = `한도: ${Number(paymentMethod.balance).toLocaleString()}원`;
+        } else { // account
+            balanceHtml = `${Number(paymentMethod.balance).toLocaleString()}원`;
+        }
+
+        li.innerHTML = `<div>
+            <span class="asset-name" data-id="${key}">${paymentMethod.name}</span>
+            ${detailsHtml}
+            </div>
+            <span class="asset-balance">${balanceHtml}</span>`;
         assetList.appendChild(li);
 
         // 거래 내역 폼의 자산 선택 드롭다운에 옵션 추가
         const option = document.createElement('option');
         option.value = key; // Firebase의 고유 키를 값으로 사용
-        option.textContent = asset.name;
+        option.textContent = paymentMethod.name;
         assetSelect.appendChild(option);
+
+        // '연동 계좌' 드롭다운에도 계좌만 추가
+        if (paymentMethod.type === 'account') {
+            const accountOption = option.cloneNode(true);
+            linkedAccountSelect.appendChild(accountOption);
+        }
     });
 }
 
@@ -119,14 +140,14 @@ function renderAssets(assets) {
  */
 function openAssetEditModal(assetId) {
     const assetRef = ref(database, `assets/${assetId}`);
-    get(assetRef).then((snapshot) => {
+    get(assetRef).then(snapshot => {
         if (snapshot.exists()) {
             const { name, balance } = snapshot.val();
             assetEditModal.style.display = 'flex';
             editAssetNameInput.value = name;
             editAssetBalanceInput.value = balance;
-            assetEditForm.dataset.id = assetId;
-            deleteAssetBtn.dataset.id = assetId;
+            assetEditForm.dataset.id = assetId; // 수정/삭제 시 사용할 ID 저장
+            deleteAssetBtn.dataset.id = assetId; // 수정/삭제 시 사용할 ID 저장
         }
     });
 }
@@ -168,14 +189,36 @@ function updateCategoryOptions() {
 function addAsset(e) {
     e.preventDefault();
     const name = assetNameInput.value;
-    const balance = +initialBalanceInput.value;
+    const type = assetTypeInput.value;
+    const balance = +initialBalanceInput.value; // 잔액 또는 한도
 
     if (name.trim() === '' || initialBalanceInput.value.trim() === '') {
-        alert('자산 이름과 초기 잔액을 모두 입력해주세요.');
+        alert('결제 수단 이름과 잔액/한도를 모두 입력해주세요.');
         return;
     }
-    push(assetsRef, { name, balance });
+
+    let newAsset = {
+        name,
+        type,
+        balance,
+    };
+
+    if (type === 'credit_card') {
+        const paymentDay = +paymentDayInput.value;
+        const linkedAccountId = linkedAccountSelect.value;
+        if (!paymentDay || !linkedAccountId) {
+            alert('신용카드는 결제일과 연동 계좌를 모두 선택해야 합니다.');
+            return;
+        }
+        newAsset.paymentDay = paymentDay;
+        newAsset.linkedAccountId = linkedAccountId;
+        newAsset.pendingAmount = 0; // 결제 예정 금액 초기화
+    }
+
+    push(assetsRef, newAsset);
     assetForm.reset();
+    // 폼 리셋 후 신용카드 필드 숨김 처리
+    creditCardFields.style.display = 'none';
 }
 
 /**
@@ -201,7 +244,7 @@ function addTransaction(e) {
     const transactionType = typeInput.value;
 
     // 새 거래 내역 객체 생성
-    const transaction = {
+    const newTransaction = {
         date: dateInput.value,
         type: transactionType,
         category: categoryInput.value,
@@ -209,16 +252,30 @@ function addTransaction(e) {
         assetId: assetId,
     };
 
-    // 1. Firebase에 거래 내역 추가
-    push(transactionsRef, transaction);
+    // 1. Firebase에 거래 내역 추가 (나중에 잔액 업데이트 후 실행)
+    const newTransactionRef = push(transactionsRef, newTransaction);
 
-    // 2. 해당 자산의 잔액 업데이트
+    // 2. 결제 수단 유형에 따라 잔액 업데이트
     const assetRef = ref(database, `assets/${assetId}`);
-    get(assetRef).then((snapshot) => {
+    get(assetRef).then(snapshot => {
         if (snapshot.exists()) {
-            const currentBalance = snapshot.val().balance;
-            const newBalance = transactionType === 'income' ? currentBalance + amount : currentBalance - amount;
-            update(assetRef, { balance: newBalance });
+            const paymentMethod = snapshot.val();
+            if (paymentMethod.type === 'credit_card' && transactionType === 'expense') {
+                // 신용카드 지출: 결제 예정 금액(pendingAmount)만 증가
+                const newPendingAmount = (paymentMethod.pendingAmount || 0) + amount;
+                update(assetRef, { pendingAmount: newPendingAmount });
+            } else {
+                // 계좌 거래(수입/지출) 또는 신용카드 수입(취소 등): 즉시 잔액 변경
+                const currentBalance = paymentMethod.balance;
+                let newBalance;
+                if (paymentMethod.type === 'credit_card' && transactionType === 'income') {
+                    const newPendingAmount = (paymentMethod.pendingAmount || 0) - amount;
+                    update(assetRef, { pendingAmount: newPendingAmount });
+                } else {
+                    newBalance = transactionType === 'income' ? currentBalance + amount : currentBalance - amount;
+                    update(assetRef, { balance: newBalance });
+                }
+            }
         }
     });
 
@@ -239,39 +296,41 @@ function updateAsset(e) {
     const assetId = e.target.dataset.id;
     const newName = editAssetNameInput.value.trim();
     const newBalanceValue = editAssetBalanceInput.value;
-
-    if (!newName || newBalanceValue === '') {
-        alert('자산 이름과 금액을 모두 입력해주세요.');
-        return;
-    }
-
+    
     const newBalance = Number(newBalanceValue);
     const assetRef = ref(database, `assets/${assetId}`);
 
     // 1. 기존 자산 정보를 가져와서 금액 변동을 계산
     get(assetRef).then(snapshot => {
         if (!snapshot.exists()) return;
-
+        
         const currentAsset = snapshot.val();
-        const currentBalance = currentAsset.balance;
-        const balanceDifference = newBalance - currentBalance;
 
-        // 2. 자산 이름과 최종 잔액 업데이트
-        update(assetRef, { name: newName, balance: newBalance });
+        // 신용카드의 경우 '결제 예정 금액'은 직접 수정하지 않음 (거래 내역 기반)
+        if (currentAsset.type === 'credit_card') {
+            // 한도만 수정
+            update(assetRef, { name: newName, balance: newBalance });
+        } else { // 계좌의 경우
+            const currentBalance = currentAsset.balance;
+            const balanceDifference = newBalance - currentBalance;
 
-        // 3. 금액에 변동이 있을 경우 '잔액 조정' 거래 내역 자동 생성
-        if (balanceDifference !== 0) {
-            const adjustmentTransaction = {
-                date: new Date().toISOString().slice(0, 10),
-                type: balanceDifference > 0 ? 'income' : 'expense',
-                category: '잔액 조정',
-                amount: Math.abs(balanceDifference),
-                assetId: assetId,
-            };
-            push(transactionsRef, adjustmentTransaction);
+            // 2. 자산 이름과 최종 잔액 업데이트
+            update(assetRef, { name: newName, balance: newBalance });
+
+            // 3. 금액에 변동이 있을 경우 '잔액 조정' 거래 내역 자동 생성
+            if (balanceDifference !== 0) {
+                const adjustmentTransaction = {
+                    date: new Date().toISOString().slice(0, 10),
+                    type: balanceDifference > 0 ? 'income' : 'expense',
+                    category: '잔액 조정',
+                    amount: Math.abs(balanceDifference),
+                    assetId: assetId,
+                };
+                push(transactionsRef, adjustmentTransaction);
+            }
         }
-
         closeAssetEditModal();
+
     }).catch(error => {
         console.error("자산 수정 중 오류 발생:", error);
         alert("자산 정보를 수정하는 데 실패했습니다.");
@@ -313,14 +372,22 @@ function deleteTransaction(e) {
     get(transactionToDeleteRef).then((snapshot) => {
         if (snapshot.exists()) {
             const { amount, type, assetId } = snapshot.val();
+            
+            // 2. 해당 결제 수단의 잔액/예정금액을 복구
             const assetRef = ref(database, `assets/${assetId}`);
-
-            // 2. 해당 자산의 잔액을 복구
-            get(assetRef).then((assetSnapshot) => {
+            get(assetRef).then(assetSnapshot => {
                 if (assetSnapshot.exists()) {
-                    const currentBalance = assetSnapshot.val().balance;
-                    const restoredBalance = type === 'income' ? currentBalance - amount : currentBalance + amount;
-                    update(assetRef, { balance: restoredBalance });
+                    const paymentMethod = assetSnapshot.val();
+                    if (paymentMethod.type === 'credit_card' && type === 'expense') {
+                        // 신용카드 지출 삭제: 결제 예정 금액에서 차감
+                        const newPendingAmount = (paymentMethod.pendingAmount || 0) - amount;
+                        update(assetRef, { pendingAmount: newPendingAmount });
+                    } else {
+                        // 계좌 거래 또는 신용카드 수입(취소) 삭제: 잔액 복구
+                        const currentBalance = paymentMethod.balance;
+                        const restoredBalance = type === 'income' ? currentBalance - amount : currentBalance + amount;
+                        update(assetRef, { balance: restoredBalance });
+                    }
                 }
             });
             // 3. 거래 내역 삭제
@@ -338,6 +405,10 @@ function init() {
     
     // 이벤트 리스너 등록
     assetForm.addEventListener('submit', addAsset);
+    assetTypeInput.addEventListener('change', (e) => {
+        // 신용카드 선택 시 추가 필드 표시
+        creditCardFields.style.display = e.target.value === 'credit_card' ? 'flex' : 'none';
+    });
     typeInput.addEventListener('change', updateCategoryOptions); // 항목 변경 시 카테고리 업데이트
     form.addEventListener('submit', addTransaction);
     transactionList.addEventListener('click', deleteTransaction);
@@ -369,6 +440,41 @@ function init() {
 
     // 페이지 로드 시 초기 카테고리 옵션 설정
     updateCategoryOptions();
+
+    // 매일 자정에 카드값 자동 결제 로직 실행 (실제 앱에서는 서버 기능 필요)
+    // 여기서는 페이지 로드 시 오늘 날짜가 결제일인 카드를 찾아 처리하는 방식으로 간소화
+    checkForCardPayments();
+}
+
+/**
+ * 신용카드 결제일 도래 시 자동 결제 처리 (간소화된 버전)
+ */
+function checkForCardPayments() {
+    const today = new Date().getDate();
+    const cardsQuery = query(assetsRef, orderByChild('type'), equalTo('credit_card'));
+
+    get(cardsQuery).then(snapshot => {
+        if (!snapshot.exists()) return;
+
+        snapshot.forEach(childSnapshot => {
+            const cardId = childSnapshot.key;
+            const card = childSnapshot.val();
+
+            // 결제일이 오늘이고, 결제할 금액이 있는 경우
+            if (card.paymentDay === today && card.pendingAmount > 0) {
+                const linkedAccountRef = ref(database, `assets/${card.linkedAccountId}`);
+                get(linkedAccountRef).then(accountSnapshot => {
+                    if (accountSnapshot.exists()) {
+                        const account = accountSnapshot.val();
+                        // 1. 연동 계좌에서 카드값만큼 잔액 차감
+                        update(linkedAccountRef, { balance: account.balance - card.pendingAmount });
+                        // 2. 신용카드의 결제 예정 금액을 0으로 리셋
+                        update(ref(database, `assets/${cardId}`), { pendingAmount: 0 });
+                    }
+                });
+            }
+        });
+    });
 }
 
 // 페이지 로드 시 초기화 함수 실행

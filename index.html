@@ -28,7 +28,7 @@
                 <select id="category" required></select>
             </div>
             <div class="form-control">
-                <label for="asset-select">자산 선택</label>
+                <label for="payment-method-select">결제 수단</label>
                 <select id="asset-select" required></select>
             </div>
             <div class="form-control">
@@ -54,38 +54,51 @@
             </tbody>
         </table>
 
-        <h2>자산 관리</h2>
+        <h2>결제 수단 관리</h2>
         <form id="asset-form">
             <div class="form-control">
-                <label for="asset-name">자산 이름</label>
+                <label for="asset-name">결제 수단 이름</label>
                 <input type="text" id="asset-name" placeholder="예: 내 통장, 현금" required>
             </div>
             <div class="form-control">
-                <label for="initial-balance">초기 잔액</label>
+                <label for="asset-type">유형</label>
+                <select id="asset-type">
+                    <option value="account" selected>계좌 (체크카드/현금)</option>
+                    <option value="credit_card">신용카드</option>
+                </select>
+            </div>
+            <div class="form-control">
+                <label for="initial-balance">초기 잔액 / 카드 한도</label>
                 <input type="number" id="initial-balance" placeholder="초기 잔액을 입력하세요" required>
+            </div>
+            <div id="credit-card-fields" class="form-control" style="display: none;">
+                <label for="payment-day">결제일 (1-31일)</label>
+                <input type="number" id="payment-day" min="1" max="31">
+                <label for="linked-account-select">연동 계좌</label>
+                <select id="linked-account-select"></select>
             </div>
             <button class="btn">자산 추가</button>
         </form>
-        <h3>자산 현황</h3>
+        <h3>결제 수단 현황</h3>
         <ul id="asset-list"></ul>
     </div>
 
     <!-- 자산 수정/삭제 모달 -->
     <div id="asset-edit-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
-            <h2>자산 수정</h2>
+            <h2>결제 수단 수정</h2>
             <form id="asset-edit-form">
                 <div class="form-control">
-                    <label for="edit-asset-name">자산 이름</label>
+                    <label for="edit-asset-name">결제 수단 이름</label>
                     <input type="text" id="edit-asset-name" required>
                 </div>
                 <div class="form-control">
-                    <label for="edit-asset-balance">자산 금액</label>
+                    <label for="edit-asset-balance">잔액/한도</label>
                     <input type="number" id="edit-asset-balance" required>
                 </div>
                 <button type="submit" class="btn">수정 완료</button>
             </form>
-            <button id="delete-asset-btn" class="btn delete-btn">자산 삭제</button>
+            <button id="delete-asset-btn" class="btn delete-btn">결제 수단 삭제</button>
             <button id="close-modal-btn" class="close-btn">&times;</button>
         </div>
     </div>

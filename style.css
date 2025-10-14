@@ -43,11 +43,16 @@ h1, h2 {
 }
 
 /* 자산 관리 폼은 2열로 고정 */
-#asset-form {
+/* 결제 수단 관리 폼 레이아웃 조정 */
+#asset-form, #asset-edit-form {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 10px;
     margin-bottom: 20px;
+}
+
+#credit-card-fields {
+    grid-column: 1 / -1; /* 신용카드 필드는 한 줄 전체를 사용 */
 }
 
 .form-control {
@@ -146,6 +151,12 @@ select {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 10px;
+}
+
+#asset-list .asset-details {
+    font-size: 0.9em;
+    color: #666;
+    margin-left: 10px;
 }
 
 #asset-list .asset-balance {
