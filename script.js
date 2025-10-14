@@ -137,23 +137,24 @@ function closeAssetEditModal() {
  */
 function updateCategoryOptions() {
     const selectedType = typeInput.value;
-    // 이전에 선택된 카테고리 값 저장
     const previousCategory = categoryInput.value;
 
     categoryInput.innerHTML = ''; // 기존 옵션 초기화
 
-    const categories = selectedType === 'income' ? incomeCategories : expenseCategories;
+    if (selectedType) { // '수입' 또는 '지출'이 선택된 경우
+        const categories = selectedType === 'income' ? incomeCategories : expenseCategories;
 
-    categories.forEach(category => {
-        const option = document.createElement('option');
-        option.value = category;
-        option.textContent = category;
-        categoryInput.appendChild(option);
-    });
+        categories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            option.textContent = category;
+            categoryInput.appendChild(option);
+        });
 
-    // 만약 이전 카테고리가 새 목록에도 존재하면, 그 값을 유지
-    if (categories.includes(previousCategory)) {
-        categoryInput.value = previousCategory;
+        // 만약 이전 카테고리가 새 목록에도 존재하면, 그 값을 유지
+        if (categories.includes(previousCategory)) {
+            categoryInput.value = previousCategory;
+        }
     }
 }
 
