@@ -43,6 +43,11 @@ const editAssetNameInput = document.getElementById('edit-asset-name');
 const deleteAssetBtn = document.getElementById('delete-asset-btn');
 const closeModalBtn = document.getElementById('close-modal-btn');
 
+// 카테고리 목록 정의
+const incomeCategories = ['월급', '성과급', '복지포인트', '기타수당', '판매수익', '이벤트수익', '용돈'];
+const expenseCategories = ['보험료', '통신료', '관리비', '교통비', 'OTT', '대출이자', '세금', '생활비', '용돈', '경조사비', '여행', '취미', '교육', '지역화폐', '데이트', '판매대금'];
+
+
 /**
  * 화면에 거래 내역 렌더링
  * @param {object} transactions - Firebase에서 가져온 거래 내역 객체
@@ -125,6 +130,31 @@ function openAssetEditModal(assetId, assetName) {
  */
 function closeAssetEditModal() {
     assetEditModal.style.display = 'none';
+}
+
+/**
+ * 항목(수입/지출) 선택에 따라 카테고리 옵션 업데이트
+ */
+function updateCategoryOptions() {
+    const selectedType = typeInput.value;
+    // 이전에 선택된 카테고리 값 저장
+    const previousCategory = categoryInput.value;
+
+    categoryInput.innerHTML = ''; // 기존 옵션 초기화
+
+    const categories = selectedType === 'income' ? incomeCategories : expenseCategories;
+
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        categoryInput.appendChild(option);
+    });
+
+    // 만약 이전 카테고리가 새 목록에도 존재하면, 그 값을 유지
+    if (categories.includes(previousCategory)) {
+        categoryInput.value = previousCategory;
+    }
 }
 
 /**
@@ -279,6 +309,7 @@ function init() {
     
     // 이벤트 리스너 등록
     assetForm.addEventListener('submit', addAsset);
+    typeInput.addEventListener('change', updateCategoryOptions); // 항목 변경 시 카테고리 업데이트
     form.addEventListener('submit', addTransaction);
     transactionList.addEventListener('click', deleteTransaction);
     assetList.addEventListener('click', (e) => {
@@ -306,6 +337,9 @@ function init() {
         const data = snapshot.val();
         renderAssets(data);
     });
+
+    // 페이지 로드 시 초기 카테고리 옵션 설정
+    updateCategoryOptions();
 }
 
 // 페이지 로드 시 초기화 함수 실행
