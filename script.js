@@ -143,11 +143,10 @@ function closeAssetEditModal() {
  */
 function updateCategoryOptions() {
     const selectedType = typeInput.value;
-    const previousCategory = categoryInput.value;
-    
-    categoryInput.innerHTML = '<option value="" selected>-- 카테고리 선택 --</option>'; // 플레이스홀더 옵션 추가
 
     if (selectedType) { // '수입' 또는 '지출'이 선택된 경우
+        // 플레이스홀더의 selected 속성을 제거하여 목록이 바로 보이게 함
+        categoryInput.innerHTML = '<option value="">-- 카테고리 선택 --</option>';
         const categories = selectedType === 'income' ? incomeCategories : expenseCategories;
 
         categories.forEach(category => {
@@ -156,6 +155,9 @@ function updateCategoryOptions() {
             option.textContent = category;
             categoryInput.appendChild(option);
         });
+    } else { // 항목이 선택되지 않은 경우
+        // 플레이스홀더를 기본 선택값으로 설정
+        categoryInput.innerHTML = '<option value="" selected>-- 카테고리 선택 --</option>';
     }
 }
 
