@@ -92,7 +92,6 @@ function renderTransactions(transactions) {
 function renderAssets(assets) {
     assetList.innerHTML = '';
     assetSelect.innerHTML = '<option value="">-- 결제 수단 선택 --</option>'; // 드롭다운 초기화
-    linkedAccountSelect.innerHTML = ''; // 연동 계좌 드롭다운 초기화
 
     if (!assets) {
         assetList.innerHTML = '<li>등록된 자산이 없습니다.</li>';
@@ -100,6 +99,7 @@ function renderAssets(assets) {
     }
 
     Object.keys(assets).forEach(key => {
+        // 이 루프는 결제 수단 현황 목록과 거래 내역 폼의 드롭다운만 채웁니다.
         const paymentMethod = assets[key];
 
         // 자산 현황 목록에 아이템 추가
@@ -126,10 +126,16 @@ function renderAssets(assets) {
         option.value = key; // Firebase의 고유 키를 값으로 사용
         option.textContent = paymentMethod.name;
         assetSelect.appendChild(option);
+    });
 
-        // '연동 계좌' 드롭다운에도 계좌만 추가
-        if (paymentMethod.type === 'account') {
-            const accountOption = option.cloneNode(true);
+    // '연동 계좌' 드롭다운은 별도로 채웁니다.
+    linkedAccountSelect.innerHTML = ''; // 여기서 초기화
+    Object.keys(assets).forEach(key => {
+        const paymentMethod = assets[key];
+        if (paymentMethod.type === 'account') { // 계좌 유형만 필터링
+            const accountOption = document.createElement('option');
+            accountOption.value = key;
+            accountOption.textContent = paymentMethod.name;
             linkedAccountSelect.appendChild(accountOption);
         }
     });
