@@ -18,7 +18,7 @@
             <div class="form-control">
                 <label for="type">항목</label>
                 <select id="type" required>
-                    <option value="" disabled selected>-- 항목 선택 --</option>
+                    <option value="" selected>-- 항목 선택 --</option>
                     <option value="expense">지출</option>
                     <option value="income">수입</option>
                 </select>
@@ -78,6 +78,10 @@
                 <div class="form-control">
                     <label for="edit-asset-name">자산 이름</label>
                     <input type="text" id="edit-asset-name" required>
+                </div>
+                <div class="form-control">
+                    <label for="edit-asset-balance">자산 금액</label>
+                    <input type="number" id="edit-asset-balance" required>
                 </div>
                 <button type="submit" class="btn">수정 완료</button>
             </form>

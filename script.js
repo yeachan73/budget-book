@@ -40,6 +40,7 @@ const assetList = document.getElementById('asset-list');
 const assetEditModal = document.getElementById('asset-edit-modal');
 const assetEditForm = document.getElementById('asset-edit-form');
 const editAssetNameInput = document.getElementById('edit-asset-name');
+const editAssetBalanceInput = document.getElementById('edit-asset-balance');
 const deleteAssetBtn = document.getElementById('delete-asset-btn');
 const closeModalBtn = document.getElementById('close-modal-btn');
 
@@ -115,14 +116,19 @@ function renderAssets(assets) {
 /**
  * 자산 수정 모달 열기
  * @param {string} assetId - 수정할 자산의 Firebase 키
- * @param {string} assetName - 수정할 자산의 현재 이름
  */
-function openAssetEditModal(assetId, assetName) {
-    assetEditModal.style.display = 'flex';
-    editAssetNameInput.value = assetName;
-    // 폼과 버튼에 assetId를 data 속성으로 저장하여 나중에 사용
-    assetEditForm.dataset.id = assetId;
-    deleteAssetBtn.dataset.id = assetId;
+function openAssetEditModal(assetId) {
+    const assetRef = ref(database, `assets/${assetId}`);
+    get(assetRef).then((snapshot) => {
+        if (snapshot.exists()) {
+            const { name, balance } = snapshot.val();
+            assetEditModal.style.display = 'flex';
+            editAssetNameInput.value = name;
+            editAssetBalanceInput.value = balance;
+            assetEditForm.dataset.id = assetId;
+            deleteAssetBtn.dataset.id = assetId;
+        }
+    });
 }
 
 /**
@@ -138,8 +144,8 @@ function closeAssetEditModal() {
 function updateCategoryOptions() {
     const selectedType = typeInput.value;
     const previousCategory = categoryInput.value;
-
-    categoryInput.innerHTML = ''; // 기존 옵션 초기화
+    
+    categoryInput.innerHTML = '<option value="" selected>-- 카테고리 선택 --</option>'; // 플레이스홀더 옵션 추가
 
     if (selectedType) { // '수입' 또는 '지출'이 선택된 경우
         const categories = selectedType === 'income' ? incomeCategories : expenseCategories;
@@ -150,11 +156,6 @@ function updateCategoryOptions() {
             option.textContent = category;
             categoryInput.appendChild(option);
         });
-
-        // 만약 이전 카테고리가 새 목록에도 존재하면, 그 값을 유지
-        if (categories.includes(previousCategory)) {
-            categoryInput.value = previousCategory;
-        }
     }
 }
 
@@ -235,14 +236,15 @@ function updateAsset(e) {
     e.preventDefault();
     const assetId = e.target.dataset.id;
     const newName = editAssetNameInput.value.trim();
+    const newBalance = editAssetBalanceInput.value;
 
-    if (!newName) {
-        alert('자산 이름을 입력해주세요.');
+    if (!newName || newBalance === '') {
+        alert('자산 이름과 금액을 모두 입력해주세요.');
         return;
     }
 
     const assetRef = ref(database, `assets/${assetId}`);
-    update(assetRef, { name: newName })
+    update(assetRef, { name: newName, balance: Number(newBalance) })
         .then(() => {
             closeAssetEditModal();
         })
@@ -317,7 +319,7 @@ function init() {
     transactionList.addEventListener('click', deleteTransaction);
     assetList.addEventListener('click', (e) => {
         if (e.target.classList.contains('asset-name')) {
-            openAssetEditModal(e.target.dataset.id, e.target.dataset.name);
+            openAssetEditModal(e.target.dataset.id);
         }
     });
     assetEditForm.addEventListener('submit', updateAsset);
