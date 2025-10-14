@@ -10,6 +10,21 @@
     <div class="container">
         <h1>간단 가계부</h1>
 
+        <h2>자산 관리</h2>
+        <form id="asset-form">
+            <div class="form-control">
+                <label for="asset-name">자산 이름</label>
+                <input type="text" id="asset-name" placeholder="예: 내 통장, 현금" required>
+            </div>
+            <div class="form-control">
+                <label for="initial-balance">초기 잔액</label>
+                <input type="number" id="initial-balance" placeholder="초기 잔액을 입력하세요" required>
+            </div>
+            <button class="btn">자산 추가</button>
+        </form>
+        <h3>자산 현황</h3>
+        <ul id="asset-list"></ul>
+
         <form id="transaction-form">
             <div class="form-control">
                 <label for="date">날짜</label>
@@ -25,6 +40,10 @@
             <div class="form-control">
                 <label for="category">카테고리</label>
                 <input type="text" id="category" placeholder="예: 식비, 월급" required>
+            </div>
+            <div class="form-control">
+                <label for="asset-select">자산 선택</label>
+                <select id="asset-select" required></select>
             </div>
             <div class="form-control">
                 <label for="amount">금액</label>

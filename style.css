@@ -42,6 +42,14 @@ h1, h2 {
     margin-bottom: 30px;
 }
 
+/* 자산 관리 폼은 2열로 고정 */
+#asset-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
 .form-control {
     display: flex;
     flex-direction: column;
@@ -120,4 +128,28 @@ select {
 
 .delete-btn:hover {
     background-color: #c0392b;
+}
+
+/* 자산 목록 스타일 */
+#asset-list {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 30px;
+}
+
+#asset-list li {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+#asset-list .asset-balance {
+    font-weight: bold;
+    font-size: 1.1em;
+    color: #333;
 }

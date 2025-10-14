@@ -1,6 +1,6 @@
 // Firebase SDK 함수 가져오기
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getDatabase, ref, onValue, push, remove } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+import { getDatabase, ref, onValue, push, remove, get, update } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
 // Firebase 프로젝트 설정
 const firebaseConfig = {
@@ -17,14 +17,24 @@ const firebaseConfig = {
 // Firebase 앱 초기화
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
-const transactionsRef = ref(database, 'transactions');
 
+// Firebase 데이터베이스 참조
+const transactionsRef = ref(database, 'transactions');
+const assetsRef = ref(database, 'assets');
+
+// DOM 요소 선택
 const form = document.getElementById('transaction-form');
 const dateInput = document.getElementById('date');
 const typeInput = document.getElementById('type');
 const categoryInput = document.getElementById('category');
 const amountInput = document.getElementById('amount');
+const assetSelect = document.getElementById('asset-select');
 const transactionList = document.getElementById('transaction-list');
+
+const assetForm = document.getElementById('asset-form');
+const assetNameInput = document.getElementById('asset-name');
+const initialBalanceInput = document.getElementById('initial-balance');
+const assetList = document.getElementById('asset-list');
 
 /**
  * 화면에 거래 내역 렌더링
@@ -59,6 +69,55 @@ function renderTransactions(transactions) {
 }
 
 /**
+ * 화면에 자산 목록 렌더링 및 드롭다운 업데이트
+ * @param {object} assets - Firebase에서 가져온 자산 객체
+ */
+function renderAssets(assets) {
+    assetList.innerHTML = '';
+    assetSelect.innerHTML = '<option value="">-- 자산 선택 --</option>'; // 드롭다운 초기화
+
+    if (!assets) {
+        assetList.innerHTML = '<li>등록된 자산이 없습니다.</li>';
+        return;
+    }
+
+    Object.keys(assets).forEach(key => {
+        const asset = assets[key];
+
+        // 자산 현황 목록에 아이템 추가
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <span class="asset-name">${asset.name}</span>
+            <span class="asset-balance">${Number(asset.balance).toLocaleString()}원</span>
+        `;
+        assetList.appendChild(li);
+
+        // 거래 내역 폼의 자산 선택 드롭다운에 옵션 추가
+        const option = document.createElement('option');
+        option.value = key; // Firebase의 고유 키를 값으로 사용
+        option.textContent = asset.name;
+        assetSelect.appendChild(option);
+    });
+}
+
+/**
+ * 자산 추가
+ * @param {Event} e - 폼 제출 이벤트
+ */
+function addAsset(e) {
+    e.preventDefault();
+    const name = assetNameInput.value;
+    const balance = +initialBalanceInput.value;
+
+    if (name.trim() === '' || initialBalanceInput.value.trim() === '') {
+        alert('자산 이름과 초기 잔액을 모두 입력해주세요.');
+        return;
+    }
+    push(assetsRef, { name, balance });
+    assetForm.reset();
+}
+
+/**
  * 거래 내역 추가
  * @param {Event} e - 폼 제출 이벤트
  */
@@ -66,7 +125,7 @@ function addTransaction(e) {
     e.preventDefault();
 
     // 입력값 유효성 검사
-    if (dateInput.value.trim() === '' || categoryInput.value.trim() === '' || amountInput.value.trim() === '') {
+    if (dateInput.value.trim() === '' || categoryInput.value.trim() === '' || amountInput.value.trim() === '' || assetSelect.value === '') {
         alert('모든 필드를 입력해주세요.');
         return;
     }
@@ -77,15 +136,30 @@ function addTransaction(e) {
         return;
     }
 
+    const assetId = assetSelect.value;
+    const transactionType = typeInput.value;
+
     // 새 거래 내역 객체 생성
     const transaction = {
         date: dateInput.value,
-        type: typeInput.value,
+        type: transactionType,
         category: categoryInput.value,
         amount: amount,
+        assetId: assetId,
     };
-    // Firebase에 데이터 추가
+
+    // 1. Firebase에 거래 내역 추가
     push(transactionsRef, transaction);
+
+    // 2. 해당 자산의 잔액 업데이트
+    const assetRef = ref(database, `assets/${assetId}`);
+    get(assetRef).then((snapshot) => {
+        if (snapshot.exists()) {
+            const currentBalance = snapshot.val().balance;
+            const newBalance = transactionType === 'income' ? currentBalance + amount : currentBalance - amount;
+            update(assetRef, { balance: newBalance });
+        }
+    });
 
     // 폼 초기화
     form.reset();
@@ -98,13 +172,29 @@ function addTransaction(e) {
  * @param {Event} e - 클릭 이벤트
  */
 function deleteTransaction(e) {
-    if (e.target.classList.contains('delete-btn')) {
-        const id = e.target.getAttribute('data-id');
-        const transactionToDeleteRef = ref(database, `transactions/${id}`);
+    if (!e.target.classList.contains('delete-btn')) return;
 
-        // Firebase에서 데이터 삭제
-        remove(transactionToDeleteRef);
-    }
+    const transactionId = e.target.getAttribute('data-id');
+    const transactionToDeleteRef = ref(database, `transactions/${transactionId}`);
+
+    // 1. 삭제할 거래 내역 정보를 먼저 가져옴
+    get(transactionToDeleteRef).then((snapshot) => {
+        if (snapshot.exists()) {
+            const { amount, type, assetId } = snapshot.val();
+            const assetRef = ref(database, `assets/${assetId}`);
+
+            // 2. 해당 자산의 잔액을 복구
+            get(assetRef).then((assetSnapshot) => {
+                if (assetSnapshot.exists()) {
+                    const currentBalance = assetSnapshot.val().balance;
+                    const restoredBalance = type === 'income' ? currentBalance - amount : currentBalance + amount;
+                    update(assetRef, { balance: restoredBalance });
+                }
+            });
+            // 3. 거래 내역 삭제
+            remove(transactionToDeleteRef);
+        }
+    });
 }
 
 /**
@@ -115,6 +205,7 @@ function init() {
     dateInput.value = new Date().toISOString().slice(0, 10);
     
     // 이벤트 리스너 등록
+    assetForm.addEventListener('submit', addAsset);
     form.addEventListener('submit', addTransaction);
     transactionList.addEventListener('click', deleteTransaction);
 
@@ -122,6 +213,12 @@ function init() {
     onValue(transactionsRef, (snapshot) => {
         const data = snapshot.val();
         renderTransactions(data);
+    });
+
+    // 자산 데이터 변경 감지
+    onValue(assetsRef, (snapshot) => {
+        const data = snapshot.val();
+        renderAssets(data);
     });
 }
 
