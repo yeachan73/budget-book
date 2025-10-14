@@ -1,6 +1,6 @@
 // Firebase SDK 함수 가져오기
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getDatabase, ref, onValue, push, remove, get, update } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+import { getDatabase, ref, onValue, push, remove, get, update, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
 // Firebase 프로젝트 설정
 const firebaseConfig = {
@@ -35,6 +35,13 @@ const assetForm = document.getElementById('asset-form');
 const assetNameInput = document.getElementById('asset-name');
 const initialBalanceInput = document.getElementById('initial-balance');
 const assetList = document.getElementById('asset-list');
+
+// 모달 관련 DOM 요소
+const assetEditModal = document.getElementById('asset-edit-modal');
+const assetEditForm = document.getElementById('asset-edit-form');
+const editAssetNameInput = document.getElementById('edit-asset-name');
+const deleteAssetBtn = document.getElementById('delete-asset-btn');
+const closeModalBtn = document.getElementById('close-modal-btn');
 
 /**
  * 화면에 거래 내역 렌더링
@@ -87,7 +94,7 @@ function renderAssets(assets) {
         // 자산 현황 목록에 아이템 추가
         const li = document.createElement('li');
         li.innerHTML = `
-            <span class="asset-name">${asset.name}</span>
+            <span class="asset-name" data-id="${key}" data-name="${asset.name}">${asset.name}</span>
             <span class="asset-balance">${Number(asset.balance).toLocaleString()}원</span>
         `;
         assetList.appendChild(li);
@@ -98,6 +105,26 @@ function renderAssets(assets) {
         option.textContent = asset.name;
         assetSelect.appendChild(option);
     });
+}
+
+/**
+ * 자산 수정 모달 열기
+ * @param {string} assetId - 수정할 자산의 Firebase 키
+ * @param {string} assetName - 수정할 자산의 현재 이름
+ */
+function openAssetEditModal(assetId, assetName) {
+    assetEditModal.style.display = 'flex';
+    editAssetNameInput.value = assetName;
+    // 폼과 버튼에 assetId를 data 속성으로 저장하여 나중에 사용
+    assetEditForm.dataset.id = assetId;
+    deleteAssetBtn.dataset.id = assetId;
+}
+
+/**
+ * 자산 수정 모달 닫기
+ */
+function closeAssetEditModal() {
+    assetEditModal.style.display = 'none';
 }
 
 /**
@@ -168,6 +195,52 @@ function addTransaction(e) {
 }
 
 /**
+ * 자산 정보 수정
+ * @param {Event} e - 폼 제출 이벤트
+ */
+function updateAsset(e) {
+    e.preventDefault();
+    const assetId = e.target.dataset.id;
+    const newName = editAssetNameInput.value.trim();
+
+    if (!newName) {
+        alert('자산 이름을 입력해주세요.');
+        return;
+    }
+
+    const assetRef = ref(database, `assets/${assetId}`);
+    update(assetRef, { name: newName })
+        .then(() => {
+            closeAssetEditModal();
+        })
+        .catch((error) => {
+            console.error("자산 수정 실패:", error);
+            alert("자산 수정 중 오류가 발생했습니다.");
+        });
+}
+
+/**
+ * 자산 삭제
+ */
+async function deleteAsset() {
+    const assetId = deleteAssetBtn.dataset.id;
+    if (!confirm("정말로 이 자산을 삭제하시겠습니까?\n연결된 거래 내역이 없는 경우에만 삭제할 수 있습니다.")) return;
+
+    // 1. 이 자산과 연결된 거래 내역이 있는지 확인
+    const transactionsQuery = query(transactionsRef, orderByChild('assetId'), equalTo(assetId));
+    const snapshot = await get(transactionsQuery);
+
+    if (snapshot.exists()) {
+        alert("이 자산에 연결된 거래 내역이 있어 삭제할 수 없습니다.");
+        return;
+    }
+
+    // 2. 연결된 거래 내역이 없으면 자산 삭제
+    await remove(ref(database, `assets/${assetId}`));
+    closeAssetEditModal();
+}
+
+/**
  * 거래 내역 삭제
  * @param {Event} e - 클릭 이벤트
  */
@@ -208,6 +281,19 @@ function init() {
     assetForm.addEventListener('submit', addAsset);
     form.addEventListener('submit', addTransaction);
     transactionList.addEventListener('click', deleteTransaction);
+    assetList.addEventListener('click', (e) => {
+        if (e.target.classList.contains('asset-name')) {
+            openAssetEditModal(e.target.dataset.id, e.target.dataset.name);
+        }
+    });
+    assetEditForm.addEventListener('submit', updateAsset);
+    deleteAssetBtn.addEventListener('click', deleteAsset);
+    closeModalBtn.addEventListener('click', closeAssetEditModal);
+    assetEditModal.addEventListener('click', (e) => {
+        if (e.target === assetEditModal) { // 오버레이 클릭 시 닫기
+            closeAssetEditModal();
+        }
+    });
 
     // Firebase 데이터베이스의 변경사항을 실시간으로 감지
     onValue(transactionsRef, (snapshot) => {
