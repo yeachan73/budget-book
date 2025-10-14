@@ -238,22 +238,44 @@ function updateAsset(e) {
     e.preventDefault();
     const assetId = e.target.dataset.id;
     const newName = editAssetNameInput.value.trim();
-    const newBalance = editAssetBalanceInput.value;
+    const newBalanceValue = editAssetBalanceInput.value;
 
-    if (!newName || newBalance === '') {
+    if (!newName || newBalanceValue === '') {
         alert('자산 이름과 금액을 모두 입력해주세요.');
         return;
     }
 
+    const newBalance = Number(newBalanceValue);
     const assetRef = ref(database, `assets/${assetId}`);
-    update(assetRef, { name: newName, balance: Number(newBalance) })
-        .then(() => {
-            closeAssetEditModal();
-        })
-        .catch((error) => {
-            console.error("자산 수정 실패:", error);
-            alert("자산 수정 중 오류가 발생했습니다.");
-        });
+
+    // 1. 기존 자산 정보를 가져와서 금액 변동을 계산
+    get(assetRef).then(snapshot => {
+        if (!snapshot.exists()) return;
+
+        const currentAsset = snapshot.val();
+        const currentBalance = currentAsset.balance;
+        const balanceDifference = newBalance - currentBalance;
+
+        // 2. 자산 이름과 최종 잔액 업데이트
+        update(assetRef, { name: newName, balance: newBalance });
+
+        // 3. 금액에 변동이 있을 경우 '잔액 조정' 거래 내역 자동 생성
+        if (balanceDifference !== 0) {
+            const adjustmentTransaction = {
+                date: new Date().toISOString().slice(0, 10),
+                type: balanceDifference > 0 ? 'income' : 'expense',
+                category: '잔액 조정',
+                amount: Math.abs(balanceDifference),
+                assetId: assetId,
+            };
+            push(transactionsRef, adjustmentTransaction);
+        }
+
+        closeAssetEditModal();
+    }).catch(error => {
+        console.error("자산 수정 중 오류 발생:", error);
+        alert("자산 정보를 수정하는 데 실패했습니다.");
+    });
 }
 
 /**
