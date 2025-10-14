@@ -344,7 +344,7 @@ function updateAsset(e) {
             // 3. 금액에 변동이 있을 경우 '잔액 조정' 거래 내역 자동 생성
             if (balanceDifference !== 0) {
                 const adjustmentTransaction = {
-                    date: new Date().toISOString().slice(0, 10),
+                    date: getKoreanDateString(),
                     type: balanceDifference > 0 ? 'income' : 'expense',
                     category: '잔액 조정',
                     amount: Math.abs(balanceDifference),
