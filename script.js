@@ -1,4 +1,24 @@
-// DOM 요소 선택
+// Firebase SDK 함수 가져오기
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+import { getDatabase, ref, onValue, push, remove } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+// Firebase 프로젝트 설정
+const firebaseConfig = {
+  apiKey: "AIzaSyAeAtH6qoB5mVhva5F-iFmiledU2VqSi8M",
+  authDomain: "budget-book-294d2.firebaseapp.com",
+  databaseURL: "https://budget-book-294d2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "budget-book-294d2",
+  storageBucket: "budget-book-294d2.appspot.com",
+  messagingSenderId: "315007462405",
+  appId: "1:315007462405:web:971804da255eac61ea006c",
+  measurementId: "G-2TCJ35L68D"
+};
+
+// Firebase 앱 초기화
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+const transactionsRef = ref(database, 'transactions');
+
 const form = document.getElementById('transaction-form');
 const dateInput = document.getElementById('date');
 const typeInput = document.getElementById('type');
@@ -6,30 +26,22 @@ const categoryInput = document.getElementById('category');
 const amountInput = document.getElementById('amount');
 const transactionList = document.getElementById('transaction-list');
 
-// localStorage에서 데이터 불러오기. 데이터가 없으면 빈 배열로 초기화
-const LOCAL_STORAGE_KEY = 'transactions';
-let transactions = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY)) || [];
-
-/**
- * localStorage에 거래 내역 저장
- */
-function saveTransactions() {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(transactions));
-}
-
 /**
  * 화면에 거래 내역 렌더링
+ * @param {object} transactions - Firebase에서 가져온 거래 내역 객체
  */
-function renderTransactions() {
+function renderTransactions(transactions) {
     // 목록 초기화
     transactionList.innerHTML = '';
 
-    if (transactions.length === 0) {
+    if (!transactions) {
         transactionList.innerHTML = '<tr><td colspan="5">거래 내역이 없습니다.</td></tr>';
         return;
     }
 
-    transactions.forEach((transaction, index) => {
+    // Firebase에서 받은 객체를 순회
+    Object.keys(transactions).forEach(key => {
+        const transaction = transactions[key];
         const row = document.createElement('tr');
         
         // 수입/지출에 따라 클래스 추가
@@ -40,7 +52,7 @@ function renderTransactions() {
             <td>${transaction.type === 'income' ? '수입' : '지출'}</td>
             <td>${transaction.category}</td>
             <td>${Number(transaction.amount).toLocaleString()}원</td>
-            <td><button class="delete-btn" data-index="${index}">삭제</button></td>
+            <td><button class="delete-btn" data-id="${key}">삭제</button></td>
         `;
         transactionList.appendChild(row);
     });
@@ -67,19 +79,13 @@ function addTransaction(e) {
 
     // 새 거래 내역 객체 생성
     const transaction = {
-        id: Date.now(), // 고유 ID 생성
         date: dateInput.value,
         type: typeInput.value,
         category: categoryInput.value,
         amount: amount,
     };
-
-    // 배열에 추가
-    transactions.push(transaction);
-
-    // 저장 및 화면 업데이트
-    saveTransactions();
-    renderTransactions();
+    // Firebase에 데이터 추가
+    push(transactionsRef, transaction);
 
     // 폼 초기화
     form.reset();
@@ -93,14 +99,11 @@ function addTransaction(e) {
  */
 function deleteTransaction(e) {
     if (e.target.classList.contains('delete-btn')) {
-        const index = e.target.getAttribute('data-index');
-        
-        // 배열에서 해당 인덱스의 항목 1개 제거
-        transactions.splice(index, 1);
+        const id = e.target.getAttribute('data-id');
+        const transactionToDeleteRef = ref(database, `transactions/${id}`);
 
-        // 저장 및 화면 업데이트
-        saveTransactions();
-        renderTransactions();
+        // Firebase에서 데이터 삭제
+        remove(transactionToDeleteRef);
     }
 }
 
@@ -115,8 +118,11 @@ function init() {
     form.addEventListener('submit', addTransaction);
     transactionList.addEventListener('click', deleteTransaction);
 
-    // 초기 데이터 렌더링
-    renderTransactions();
+    // Firebase 데이터베이스의 변경사항을 실시간으로 감지
+    onValue(transactionsRef, (snapshot) => {
+        const data = snapshot.val();
+        renderTransactions(data);
+    });
 }
 
 // 페이지 로드 시 초기화 함수 실행
