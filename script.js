@@ -91,7 +91,8 @@ function renderTransactions(transactions) {
  */
 function renderAssets(assets) {
     assetList.innerHTML = '';
-    assetSelect.innerHTML = '<option value="">-- 자산 선택 --</option>'; // 드롭다운 초기화
+    assetSelect.innerHTML = '<option value="">-- 결제 수단 선택 --</option>'; // 드롭다운 초기화
+    linkedAccountSelect.innerHTML = ''; // 연동 계좌 드롭다운 초기화
 
     if (!assets) {
         assetList.innerHTML = '<li>등록된 자산이 없습니다.</li>';
