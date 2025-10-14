@@ -52,6 +52,23 @@ const closeModalBtn = document.getElementById('close-modal-btn');
 const incomeCategories = ['월급', '성과급', '복지포인트', '기타수당', '판매수익', '이벤트수익', '용돈'];
 const expenseCategories = ['보험료', '통신료', '관리비', '교통비', 'OTT', '대출이자', '세금', '생활비', '용돈', '경조사비', '여행', '취미', '교육', '지역화폐', '데이트', '판매대금'];
 
+/**
+ * 현재 한국 표준시(KST) 날짜를 'YYYY-MM-DD' 형식의 문자열로 반환합니다.
+ * KST는 UTC+9 입니다.
+ * @returns {string} 'YYYY-MM-DD' 형식의 한국 날짜 문자열
+ */
+function getKoreanDateString() {
+    const now = new Date();
+    // UTC 시간(밀리초) + 현재 타임존 오프셋(밀리초) = UTC 시간
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+    const KST_OFFSET = 9 * 60 * 60 * 1000; // 9시간을 밀리초로 변환
+    const kstDate = new Date(utc + KST_OFFSET);
+
+    const year = kstDate.getFullYear();
+    const month = (kstDate.getMonth() + 1).toString().padStart(2, '0'); // 월은 0부터 시작하므로 +1
+    const day = kstDate.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
 /**
  * 화면에 거래 내역 렌더링
@@ -289,7 +306,7 @@ function addTransaction(e) {
     // 폼 초기화
     form.reset();
     // 날짜는 오늘 날짜로 다시 설정
-    dateInput.value = new Date().toISOString().slice(0, 10);
+    dateInput.value = getKoreanDateString();
     // 폼 리셋 후 카테고리 옵션을 다시 업데이트
     updateCategoryOptions(); // form.reset()으로 type이 ''가 되었으므로, category 목록을 비워줌
 }
@@ -408,7 +425,7 @@ function deleteTransaction(e) {
  */
 function init() {
     // 오늘 날짜를 기본값으로 설정
-    dateInput.value = new Date().toISOString().slice(0, 10);
+    dateInput.value = getKoreanDateString();
     
     // 이벤트 리스너 등록
     assetForm.addEventListener('submit', addAsset);
