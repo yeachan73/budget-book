@@ -119,8 +119,8 @@ function getKoreanYearMonthString() {
  */
 async function displayAppVersion() {
     // ⚠️ 아래 USERNAME과 REPONAME을 본인의 정보로 수정해주세요!
-    const GITHUB_USERNAME = 'YOUR_USERNAME'; // 예: 'gildong-hong'
-    const GITHUB_REPONAME = 'YOUR_REPONAME'; // 예: 'my-budget-book'
+    const GITHUB_USERNAME = 'yeachan73'; // 👈 본인의 GitHub 사용자 이름으로 변경하세요.
+    const GITHUB_REPONAME = 'budget-book'; // 👈 본인의 GitHub 저장소 이름으로 변경하세요.
     const BRANCH_NAME = 'main'; // 또는 'master' 등 주 브랜치 이름
 
     try {
