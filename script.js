@@ -144,18 +144,6 @@ function renderAssets(assets) {
         option.textContent = paymentMethod.name;
         assetSelect.appendChild(option);
     });
-
-    // '연동 계좌' 드롭다운은 별도로 채웁니다.
-    linkedAccountSelect.innerHTML = ''; // 여기서 초기화
-    Object.keys(assets).forEach(key => {
-        const paymentMethod = assets[key];
-        if (paymentMethod.type === 'account') { // 계좌 유형만 필터링
-            const accountOption = document.createElement('option');
-            accountOption.value = key;
-            accountOption.textContent = paymentMethod.name;
-            linkedAccountSelect.appendChild(accountOption);
-        }
-    });
 }
 
 /**
