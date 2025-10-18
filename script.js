@@ -429,8 +429,26 @@ function init() {
     
     // 이벤트 리스너 등록
     assetForm.addEventListener('submit', addAsset);
-    assetTypeInput.addEventListener('change', (e) => {
+    assetTypeInput.addEventListener('change', async (e) => {
         // 신용카드 선택 시 추가 필드 표시
+        if (e.target.value === 'credit_card') {
+            // 연동 계좌 목록을 채우기 위해 현재 자산 데이터를 다시 가져옵니다.
+            const snapshot = await get(assetsRef);
+            const assets = snapshot.val();
+
+            linkedAccountSelect.innerHTML = ''; // 목록 초기화
+            if (assets) {
+                Object.keys(assets).forEach(key => {
+                    const asset = assets[key];
+                    if (asset.type === 'account') {
+                        const option = document.createElement('option');
+                        option.value = key;
+                        option.textContent = asset.name;
+                        linkedAccountSelect.appendChild(option);
+                    }
+                });
+            }
+        }
         creditCardFields.style.display = e.target.value === 'credit_card' ? 'flex' : 'none';
     });
     typeInput.addEventListener('change', updateCategoryOptions); // 항목 변경 시 카테고리 업데이트
