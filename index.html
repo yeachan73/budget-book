@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>간단 가계부</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>간단 가계부</h1>
-
+        <div class="header-container">
+            <h1>간단 가계부</h1>
+            <span id="app-version"></span>
+        </div>
+        
         <form id="transaction-form">
             <div class="form-control">
                 <label for="date">날짜</label>
@@ -140,7 +144,7 @@
 
         <h2>데이터 관리</h2>
         <div class="data-management">
-            <button id="export-csv-btn" class="btn">거래 내역 CSV로 내보내기</button>
+            <button id="export-xlsx-btn" class="btn">거래 내역 Excel(XLSX)로 내보내기</button>
             <div class="form-control">
                 <label for="import-csv-input">거래 내역 CSV 파일 가져오기</label>
                 <input type="file" id="import-csv-input" accept=".csv">

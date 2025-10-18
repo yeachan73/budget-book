@@ -60,7 +60,7 @@ const editPaymentDayInput = document.getElementById('edit-payment-day');
 const editLinkedAccountSelect = document.getElementById('edit-linked-account-select');
 
 // 데이터 관리 DOM 요소
-const exportCsvBtn = document.getElementById('export-csv-btn');
+const exportXlsxBtn = document.getElementById('export-xlsx-btn');
 const importCsvInput = document.getElementById('import-csv-input');
 
 // 통계 관련 DOM 요소 및 변수
@@ -71,6 +71,7 @@ let allTransactions = {}; // 모든 거래 내역을 저장할 변수
 const summaryIncomeEl = document.getElementById('summary-income');
 const summaryExpenseEl = document.getElementById('summary-expense');
 const summaryNetEl = document.getElementById('summary-net');
+const appVersionEl = document.getElementById('app-version');
 
 // 카테고리 관리 DOM 요소
 const categoryForm = document.getElementById('category-form');
@@ -111,6 +112,29 @@ function getKoreanYearMonthString() {
     const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
     const kstDate = new Date(utc + (9 * 60 * 60 * 1000));
     return kstDate.toISOString().slice(0, 7);
+}
+
+/**
+ * GitHub API를 통해 최신 커밋 정보를 가져와 버전을 표시하는 함수
+ */
+async function displayAppVersion() {
+    // ⚠️ 아래 USERNAME과 REPONAME을 본인의 정보로 수정해주세요!
+    const GITHUB_USERNAME = 'YOUR_USERNAME'; // 예: 'gildong-hong'
+    const GITHUB_REPONAME = 'YOUR_REPONAME'; // 예: 'my-budget-book'
+    const BRANCH_NAME = 'main'; // 또는 'master' 등 주 브랜치 이름
+
+    try {
+        const response = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPONAME}/commits/${BRANCH_NAME}`);
+        if (!response.ok) {
+            throw new Error(`GitHub API Error: ${response.status}`);
+        }
+        const commitData = await response.json();
+        const shortHash = commitData.sha.substring(0, 7); // 커밋 해시 앞 7자리
+        appVersionEl.textContent = `Ver. ${shortHash}`;
+    } catch (error) {
+        console.error("버전 정보를 가져오는 데 실패했습니다:", error);
+        appVersionEl.textContent = 'Ver. unknown';
+    }
 }
 
 /**
@@ -572,16 +596,16 @@ function deleteTransaction(e) {
 }
 
 /**
- * 거래 내역 데이터를 CSV 파일로 내보내는 함수
+ * 거래 내역 데이터를 XLSX (Excel) 파일로 내보내는 함수
  */
-async function exportToCSV() {
+async function exportToXLSX() {
     try {
         const [transactionsSnapshot, assetsSnapshot] = await Promise.all([
             get(transactionsRef),
             get(assetsRef)
         ]);
 
-        if (!transactionsSnapshot.exists()) {
+        if (!transactionsSnapshot.exists() || Object.keys(transactionsSnapshot.val()).length === 0) {
             alert('내보낼 거래 내역이 없습니다.');
             return;
         }
@@ -589,36 +613,31 @@ async function exportToCSV() {
         const transactions = transactionsSnapshot.val();
         const assets = assetsSnapshot.val() || {};
 
-        // assetId를 assetName으로 변환하기 위한 맵 생성
         const assetIdToNameMap = Object.keys(assets).reduce((map, key) => {
             map[key] = assets[key].name;
             return map;
         }, {});
 
-        // CSV 헤더
-        let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "날짜,항목,카테고리,금액,결제수단\r\n";
+        // 1. SheetJS가 요구하는 데이터 형식 (객체 배열)으로 변환
+        const dataForSheet = Object.values(transactions).map(tx => ({
+            '날짜': tx.date,
+            '항목': tx.type === 'income' ? '수입' : '지출',
+            '카테고리': tx.category,
+            '금액': tx.amount,
+            '결제수단': assetIdToNameMap[tx.assetId] || '알 수 없음'
+        }));
 
-        // CSV 데이터 행
-        Object.values(transactions).forEach(tx => {
-            const row = [
-                tx.date,
-                tx.type === 'income' ? '수입' : '지출',
-                tx.category,
-                tx.amount,
-                assetIdToNameMap[tx.assetId] || '알 수 없음' // 자산이 삭제된 경우 대비
-            ];
-            csvContent += row.join(",") + "\r\n";
-        });
+        // 2. 새로운 워크북(엑셀 파일) 생성
+        const workbook = XLSX.utils.book_new();
+        
+        // 3. 변환된 데이터를 사용하여 새 워크시트 생성
+        const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
 
-        // 파일 다운로드
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `가계부_거래내역_${getKoreanDateString()}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // 4. 워크북에 워크시트 추가 ('거래내역'이라는 시트 이름으로)
+        XLSX.utils.book_append_sheet(workbook, worksheet, '거래내역');
+
+        // 5. 파일 생성 및 다운로드
+        XLSX.writeFile(workbook, `가계부_거래내역_${getKoreanDateString()}.xlsx`);
 
     } catch (error) {
         console.error("CSV 내보내기 중 오류 발생:", error);
@@ -653,7 +672,7 @@ async function importFromCSV(e) {
 
         lines.forEach(line => {
             if (!line) return;
-            const [date, type, category, amount, assetName] = line.split(',');
+            const [date, type, category, amount, assetName] = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             
             const assetId = assetNameToIdMap[assetName];
             if (!assetId) {
@@ -810,6 +829,7 @@ function init() {
     // 오늘 날짜를 기본값으로 설정
     dateInput.value = getKoreanDateString();
     statsMonthInput.value = getKoreanYearMonthString(); // 통계 월 기본값 설정
+    displayAppVersion(); // 버전 정보 표시 함수 호출
     
     // 이벤트 리스너 등록
     assetForm.addEventListener('submit', addAsset);
@@ -839,7 +859,7 @@ function init() {
             closeAssetEditModal();
         }
     });
-    exportCsvBtn.addEventListener('click', exportToCSV);
+    exportXlsxBtn.addEventListener('click', exportToXLSX);
     importCsvInput.addEventListener('change', importFromCSV);
     statsMonthInput.addEventListener('change', () => {
         updateChart();
