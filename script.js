@@ -122,16 +122,35 @@ async function displayAppVersion() {
     // ⚠️ 주의: 이 방법은 토큰이 외부에 노출될 수 있어 보안에 취약합니다.
     // const GITHUB_TOKEN = '여기에_복사한_토큰을_붙여넣으세요';
 
+    const CACHE_KEY = 'app_version_cache';
+    const CACHE_DURATION = 10 * 60 * 1000; // 10분
+
     try {
+        const cachedData = JSON.parse(sessionStorage.getItem(CACHE_KEY));
+
+        // 캐시가 유효하면 캐시된 데이터를 사용
+        if (cachedData && (Date.now() - cachedData.timestamp < CACHE_DURATION)) {
+            appVersionEl.textContent = `Ver. ${cachedData.version}`;
+            return;
+        }
+
+        // 캐시가 없거나 만료되었으면 API 호출
         const response = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPONAME}/commits/${BRANCH_NAME}`, {
             // headers: { 'Authorization': `token ${GITHUB_TOKEN}` } // 비공개 저장소일 경우 이 줄의 주석을 해제하세요.
         });
+
         if (!response.ok) {
             throw new Error(`GitHub API Error: ${response.status}`);
         }
+
         const commitData = await response.json();
         const shortHash = commitData.sha.substring(0, 7); // 커밋 해시 앞 7자리
         appVersionEl.textContent = `Ver. ${shortHash}`;
+
+        // 성공적인 호출 결과를 캐시에 저장
+        const newCacheData = { version: shortHash, timestamp: Date.now() };
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify(newCacheData));
+
     } catch (error) {
         console.error("버전 정보를 가져오는 데 실패했습니다:", error);
         appVersionEl.textContent = 'Ver. unknown';
