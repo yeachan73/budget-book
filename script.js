@@ -436,7 +436,7 @@ function addTransaction(e) {
             if (paymentMethod.type === 'credit_card' && transactionType === 'expense') {
                 // 신용카드 지출: 결제 예정 금액(pendingAmount)만 증가
                 const newPendingAmount = (paymentMethod.pendingAmount || 0) + amount;
-                update(assetRef, { pendingAmount: newPendingAmount });
+                assetRef.update({ pendingAmount: newPendingAmount });
             } else {
                 // 계좌 거래(수입/지출) 또는 신용카드 수입(취소 등): 즉시 잔액 변경
                 const currentBalance = paymentMethod.balance;
