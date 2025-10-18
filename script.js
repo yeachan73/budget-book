@@ -1,7 +1,3 @@
-// Firebase SDK 함수 가져오기
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getDatabase, ref, onValue, push, remove, get, update, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
-
 // Firebase 프로젝트 설정
 const firebaseConfig = {
   apiKey: "AIzaSyAeAtH6qoB5mVhva5F-iFmiledU2VqSi8M",
@@ -15,13 +11,13 @@ const firebaseConfig = {
 };
 
 // Firebase 앱 초기화
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
+const app = firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
 
 // Firebase 데이터베이스 참조
-const transactionsRef = ref(database, 'transactions');
-const assetsRef = ref(database, 'assets');
-const categoriesRef = ref(database, 'categories');
+const transactionsRef = database.ref('transactions');
+const assetsRef = database.ref('assets');
+const categoriesRef = database.ref('categories');
 
 // DOM 요소 선택
 const form = document.getElementById('transaction-form');
@@ -247,8 +243,8 @@ function renderAssets(assets) {
  * @param {string} assetId - 수정할 자산의 Firebase 키
  */
 function openAssetEditModal(assetId) {
-    const assetRef = ref(database, `assets/${assetId}`);
-    get(assetRef).then(snapshot => {
+    const assetRef = database.ref(`assets/${assetId}`);
+    assetRef.get().then(snapshot => {
         if (snapshot.exists()) {
             const asset = snapshot.val();
             const { name, balance, type, paymentDay, linkedAccountId } = asset;
@@ -331,8 +327,8 @@ function addCategory(e) {
         return;
     }
 
-    const categoryListRef = ref(database, `categories/${type}`);
-    push(categoryListRef, name);
+    const categoryListRef = database.ref(`categories/${type}`);
+    categoryListRef.push(name);
     categoryForm.reset();
 }
 
@@ -392,7 +388,7 @@ function addAsset(e) {
         newAsset.pendingAmount = 0; // 결제 예정 금액 초기화
     }
 
-    push(assetsRef, newAsset);
+    assetsRef.push(newAsset);
     assetForm.reset();
     // 폼 리셋 후 신용카드 필드 숨김 처리
     creditCardFields.style.display = 'none';
@@ -430,11 +426,11 @@ function addTransaction(e) {
     };
 
     // 1. Firebase에 거래 내역 추가 (나중에 잔액 업데이트 후 실행)
-    const newTransactionRef = push(transactionsRef, newTransaction);
+    const newTransactionRef = transactionsRef.push(newTransaction);
 
     // 2. 결제 수단 유형에 따라 잔액 업데이트
-    const assetRef = ref(database, `assets/${assetId}`);
-    get(assetRef).then(snapshot => {
+    const assetRef = database.ref(`assets/${assetId}`);
+    assetRef.get().then(snapshot => {
         if (snapshot.exists()) {
             const paymentMethod = snapshot.val();
             if (paymentMethod.type === 'credit_card' && transactionType === 'expense') {
@@ -447,10 +443,10 @@ function addTransaction(e) {
                 let newBalance;
                 if (paymentMethod.type === 'credit_card' && transactionType === 'income') {
                     const newPendingAmount = (paymentMethod.pendingAmount || 0) - amount;
-                    update(assetRef, { pendingAmount: newPendingAmount });
+                    assetRef.update({ pendingAmount: newPendingAmount });
                 } else {
                     newBalance = transactionType === 'income' ? currentBalance + amount : currentBalance - amount;
-                    update(assetRef, { balance: newBalance });
+                    assetRef.update({ balance: newBalance });
                 }
             }
         }
@@ -475,7 +471,7 @@ function updateAsset(e) {
     const newBalance = Number(editAssetBalanceInput.value);
     const newType = editAssetTypeInput.value;
 
-    const assetRef = ref(database, `assets/${assetId}`);
+    const assetRef = database.ref(`assets/${assetId}`);
 
     let updatedAssetData = {
         name: newName,
@@ -493,17 +489,17 @@ function updateAsset(e) {
         updatedAssetData.paymentDay = paymentDay;
         updatedAssetData.linkedAccountId = linkedAccountId;
         // 만약 계좌 -> 신용카드로 변경하는 경우, pendingAmount 필드 추가
-        get(assetRef).then(snapshot => {
+        assetRef.get().then(snapshot => {
             if (snapshot.exists() && snapshot.val().type !== 'credit_card') {
                 updatedAssetData.pendingAmount = 0;
             }
-            update(assetRef, updatedAssetData);
+            assetRef.update(updatedAssetData);
         });
     } else { // 계좌로 변경하는 경우, 신용카드 관련 필드 제거
         updatedAssetData.paymentDay = null;
         updatedAssetData.linkedAccountId = null;
-        updatedAssetData.pendingAmount = null;
-        update(assetRef, updatedAssetData);
+        updatedAssetData.pendingAmount = null; // 신용카드 관련 필드 제거
+        assetRef.update(updatedAssetData);
     }
 
     // 참고: 잔액 조정 로직은 단순화를 위해 이번 수정에서는 제외했습니다.
@@ -519,8 +515,8 @@ async function deleteAsset() {
     if (!confirm("정말로 이 자산을 삭제하시겠습니까?\n연결된 거래 내역이 없는 경우에만 삭제할 수 있습니다.")) return;
 
     // 1. 이 자산과 연결된 거래 내역이 있는지 확인
-    const transactionsQuery = query(transactionsRef, orderByChild('assetId'), equalTo(assetId));
-    const snapshot = await get(transactionsQuery);
+    const transactionsQuery = transactionsRef.orderByChild('assetId').equalTo(assetId);
+    const snapshot = await transactionsQuery.get();
 
     if (snapshot.exists()) {
         alert("이 자산에 연결된 거래 내역이 있어 삭제할 수 없습니다.");
@@ -528,7 +524,7 @@ async function deleteAsset() {
     }
 
     // 2. 연결된 거래 내역이 없으면 자산 삭제
-    await remove(ref(database, `assets/${assetId}`));
+    await database.ref(`assets/${assetId}`).remove();
     closeAssetEditModal();
 }
 
@@ -541,25 +537,25 @@ async function deleteCategory(e) {
 
     const categoryId = e.target.dataset.id;
     const categoryType = e.target.dataset.type;
-    const categoryRef = ref(database, `categories/${categoryType}/${categoryId}`);
+    const categoryRef = database.ref(`categories/${categoryType}/${categoryId}`);
 
     // 1. 삭제할 카테고리 이름 가져오기
-    const categorySnapshot = await get(categoryRef);
+    const categorySnapshot = await categoryRef.get();
     if (!categorySnapshot.exists()) return;
     const categoryName = categorySnapshot.val();
 
     if (!confirm(`'${categoryName}' 카테고리를 삭제하시겠습니까?\n이 카테고리를 사용하는 거래 내역이 있으면 삭제할 수 없습니다.`)) return;
 
     // 2. 해당 카테고리를 사용하는 거래 내역이 있는지 확인
-    const transactionsQuery = query(transactionsRef, orderByChild('category'), equalTo(categoryName));
-    const snapshot = await get(transactionsQuery);
+    const transactionsQuery = transactionsRef.orderByChild('category').equalTo(categoryName);
+    const snapshot = await transactionsQuery.get();
 
     if (snapshot.exists()) {
         alert("이 카테고리를 사용하는 거래 내역이 있어 삭제할 수 없습니다.");
         return;
     }
     // 3. 연결된 거래 내역이 없으면 카테고리 삭제
-    await remove(categoryRef);
+    await categoryRef.remove();
 }
 
 /**
@@ -570,32 +566,32 @@ function deleteTransaction(e) {
     if (!e.target.classList.contains('delete-btn')) return;
 
     const transactionId = e.target.getAttribute('data-id');
-    const transactionToDeleteRef = ref(database, `transactions/${transactionId}`);
+    const transactionToDeleteRef = database.ref(`transactions/${transactionId}`);
 
     // 1. 삭제할 거래 내역 정보를 먼저 가져옴
-    get(transactionToDeleteRef).then((snapshot) => {
+    transactionToDeleteRef.get().then((snapshot) => {
         if (snapshot.exists()) {
             const { amount, type, assetId } = snapshot.val();
             
             // 2. 해당 결제 수단의 잔액/예정금액을 복구
-            const assetRef = ref(database, `assets/${assetId}`);
-            get(assetRef).then(assetSnapshot => {
+            const assetRef = database.ref(`assets/${assetId}`);
+            assetRef.get().then(assetSnapshot => {
                 if (assetSnapshot.exists()) {
                     const paymentMethod = assetSnapshot.val();
                     if (paymentMethod.type === 'credit_card' && type === 'expense') {
                         // 신용카드 지출 삭제: 결제 예정 금액에서 차감
                         const newPendingAmount = (paymentMethod.pendingAmount || 0) - amount;
-                        update(assetRef, { pendingAmount: newPendingAmount });
+                        assetRef.update({ pendingAmount: newPendingAmount });
                     } else {
                         // 계좌 거래 또는 신용카드 수입(취소) 삭제: 잔액 복구
                         const currentBalance = paymentMethod.balance;
                         const restoredBalance = type === 'income' ? currentBalance - amount : currentBalance + amount;
-                        update(assetRef, { balance: restoredBalance });
+                        assetRef.update({ balance: restoredBalance });
                     }
                 }
             });
             // 3. 거래 내역 삭제
-            remove(transactionToDeleteRef);
+            transactionToDeleteRef.remove();
         }
     });
 }
@@ -606,8 +602,8 @@ function deleteTransaction(e) {
 async function exportToXLSX() {
     try {
         const [transactionsSnapshot, assetsSnapshot] = await Promise.all([
-            get(transactionsRef),
-            get(assetsRef)
+            transactionsRef.get(),
+            assetsRef.get()
         ]);
 
         if (!transactionsSnapshot.exists() || Object.keys(transactionsSnapshot.val()).length === 0) {
@@ -668,7 +664,7 @@ async function importFromCSV(e) {
         const csvData = event.target.result;
         const lines = csvData.split(/\r\n|\n/).slice(1); // 헤더 제외
 
-        const assetsSnapshot = await get(assetsRef);
+        const assetsSnapshot = await assetsRef.get();
         const assets = assetsSnapshot.val() || {};
         const assetNameToIdMap = Object.keys(assets).reduce((map, key) => {
             map[assets[key].name] = key;
@@ -686,7 +682,7 @@ async function importFromCSV(e) {
             }
 
             // addTransaction 함수를 재사용하지 않고 직접 push (잔액 계산 중복 방지)
-            push(transactionsRef, { date, type: type === '수입' ? 'income' : 'expense', category, amount: +amount, assetId });
+            transactionsRef.push({ date, type: type === '수입' ? 'income' : 'expense', category, amount: +amount, assetId });
         });
         alert('가져오기가 완료되었습니다. 페이지가 새로고침될 수 있습니다.');
     };
@@ -878,7 +874,7 @@ function init() {
     });
 
     // Firebase 데이터베이스의 변경사항을 실시간으로 감지
-    onValue(transactionsRef, (snapshot) => {
+    transactionsRef.on('value', (snapshot) => {
         allTransactions = snapshot.val() || {};
         renderTransactions(allTransactions); // 초기 로드 시 전체 목록 렌더링
         updateChart(); // 거래 내역 변경 시 차트와 요약 업데이트
@@ -886,13 +882,13 @@ function init() {
     });
 
     // 자산 데이터 변경 감지
-    onValue(assetsRef, (snapshot) => {
+    assetsRef.on('value', (snapshot) => {
         const data = snapshot.val();
         renderAssets(data);
     });
 
     // 카테고리 데이터 변경 감지
-    onValue(categoriesRef, (snapshot) => {
+    categoriesRef.on('value', (snapshot) => {
         const data = snapshot.val() || { income: {}, expense: {} };
         renderCategoryLists(data);
     });
@@ -907,9 +903,9 @@ function init() {
  */
 function checkForCardPayments() {
     const today = new Date().getDate();
-    const cardsQuery = query(assetsRef, orderByChild('type'), equalTo('credit_card'));
+    const cardsQuery = assetsRef.orderByChild('type').equalTo('credit_card');
 
-    get(cardsQuery).then(snapshot => {
+    cardsQuery.get().then(snapshot => {
         if (!snapshot.exists()) return;
 
         snapshot.forEach(childSnapshot => {
@@ -918,14 +914,14 @@ function checkForCardPayments() {
 
             // 결제일이 오늘이고, 결제할 금액이 있는 경우
             if (card.paymentDay === today && card.pendingAmount > 0) {
-                const linkedAccountRef = ref(database, `assets/${card.linkedAccountId}`);
-                get(linkedAccountRef).then(accountSnapshot => {
+                const linkedAccountRef = database.ref(`assets/${card.linkedAccountId}`);
+                linkedAccountRef.get().then(accountSnapshot => {
                     if (accountSnapshot.exists()) {
                         const account = accountSnapshot.val();
                         // 1. 연동 계좌에서 카드값만큼 잔액 차감
-                        update(linkedAccountRef, { balance: account.balance - card.pendingAmount });
+                        linkedAccountRef.update({ balance: account.balance - card.pendingAmount });
                         // 2. 신용카드의 결제 예정 금액을 0으로 리셋
-                        update(ref(database, `assets/${cardId}`), { pendingAmount: 0 });
+                        database.ref(`assets/${cardId}`).update({ pendingAmount: 0 });
                     }
                 });
             }
