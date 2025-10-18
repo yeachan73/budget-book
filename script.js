@@ -109,6 +109,7 @@ function renderTransactions(transactions) {
 function renderAssets(assets) {
     assetList.innerHTML = '';
     assetSelect.innerHTML = '<option value="">-- 결제 수단 선택 --</option>'; // 드롭다운 초기화
+    linkedAccountSelect.innerHTML = ''; // 연동 계좌 드롭다운도 여기서 초기화
 
     if (!assets) {
         assetList.innerHTML = '<li>등록된 자산이 없습니다.</li>';
@@ -143,6 +144,14 @@ function renderAssets(assets) {
         option.value = key; // Firebase의 고유 키를 값으로 사용
         option.textContent = paymentMethod.name;
         assetSelect.appendChild(option);
+
+        // 자산 유형이 '계좌'인 경우, '연동 계좌' 드롭다운에도 추가
+        if (paymentMethod.type === 'account') {
+            const accountOption = document.createElement('option');
+            accountOption.value = key;
+            accountOption.textContent = paymentMethod.name;
+            linkedAccountSelect.appendChild(accountOption);
+        }
     });
 }
 
@@ -417,26 +426,8 @@ function init() {
     
     // 이벤트 리스너 등록
     assetForm.addEventListener('submit', addAsset);
-    assetTypeInput.addEventListener('change', async (e) => {
-        // 신용카드 선택 시 추가 필드 표시
-        if (e.target.value === 'credit_card') {
-            // 연동 계좌 목록을 채우기 위해 현재 자산 데이터를 다시 가져옵니다.
-            const snapshot = await get(assetsRef);
-            const assets = snapshot.val();
-
-            linkedAccountSelect.innerHTML = ''; // 목록 초기화
-            if (assets) {
-                Object.keys(assets).forEach(key => {
-                    const asset = assets[key];
-                    if (asset.type === 'account') {
-                        const option = document.createElement('option');
-                        option.value = key;
-                        option.textContent = asset.name;
-                        linkedAccountSelect.appendChild(option);
-                    }
-                });
-            }
-        }
+    assetTypeInput.addEventListener('change', (e) => {
+        // 신용카드 선택 시 추가 필드 표시/숨김
         creditCardFields.style.display = e.target.value === 'credit_card' ? 'flex' : 'none';
     });
     typeInput.addEventListener('change', updateCategoryOptions); // 항목 변경 시 카테고리 업데이트
