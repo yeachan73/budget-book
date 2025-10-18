@@ -21,6 +21,7 @@ const database = getDatabase(app);
 // Firebase 데이터베이스 참조
 const transactionsRef = ref(database, 'transactions');
 const assetsRef = ref(database, 'assets');
+const categoriesRef = ref(database, 'categories');
 
 // DOM 요소 선택
 const form = document.getElementById('transaction-form');
@@ -30,6 +31,12 @@ const categoryInput = document.getElementById('category');
 const amountInput = document.getElementById('amount');
 const assetSelect = document.getElementById('asset-select');
 const transactionList = document.getElementById('transaction-list');
+
+// 필터 관련 DOM 요소
+const filterStartDateInput = document.getElementById('filter-start-date');
+const filterEndDateInput = document.getElementById('filter-end-date');
+const filterBtn = document.getElementById('filter-btn');
+const resetFilterBtn = document.getElementById('reset-filter-btn');
 
 const assetForm = document.getElementById('asset-form');
 const assetNameInput = document.getElementById('asset-name');
@@ -44,13 +51,38 @@ const linkedAccountSelect = document.getElementById('linked-account-select');
 const assetEditModal = document.getElementById('asset-edit-modal');
 const assetEditForm = document.getElementById('asset-edit-form');
 const editAssetNameInput = document.getElementById('edit-asset-name');
+const editAssetTypeInput = document.getElementById('edit-asset-type');
 const editAssetBalanceInput = document.getElementById('edit-asset-balance');
 const deleteAssetBtn = document.getElementById('delete-asset-btn');
 const closeModalBtn = document.getElementById('close-modal-btn');
+const editCreditCardFields = document.getElementById('edit-credit-card-fields');
+const editPaymentDayInput = document.getElementById('edit-payment-day');
+const editLinkedAccountSelect = document.getElementById('edit-linked-account-select');
+
+// 데이터 관리 DOM 요소
+const exportCsvBtn = document.getElementById('export-csv-btn');
+const importCsvInput = document.getElementById('import-csv-input');
+
+// 통계 관련 DOM 요소 및 변수
+const statsMonthInput = document.getElementById('stats-month');
+const expenseChartCanvas = document.getElementById('expense-chart').getContext('2d');
+let expenseChart = null; // Chart.js 인스턴스를 저장할 변수
+let allTransactions = {}; // 모든 거래 내역을 저장할 변수
+const summaryIncomeEl = document.getElementById('summary-income');
+const summaryExpenseEl = document.getElementById('summary-expense');
+const summaryNetEl = document.getElementById('summary-net');
+
+// 카테고리 관리 DOM 요소
+const categoryForm = document.getElementById('category-form');
+const categoryNameInput = document.getElementById('category-name');
+const categoryTypeInput = document.getElementById('category-type');
+const incomeCategoryListEl = document.getElementById('income-category-list');
+const expenseCategoryListEl = document.getElementById('expense-category-list');
+
 
 // 카테고리 목록 정의
-const incomeCategories = ['월급', '성과급', '복지포인트', '기타수당', '판매수익', '이벤트수익', '용돈'];
-const expenseCategories = ['보험료', '통신료', '관리비', '교통비', 'OTT', '대출이자', '세금', '생활비', '용돈', '경조사비', '여행', '취미', '교육', '지역화폐', '데이트', '판매대금'];
+let incomeCategories = [];
+let expenseCategories = [];
 
 /**
  * 현재 한국 표준시(KST) 날짜를 'YYYY-MM-DD' 형식의 문자열로 반환합니다.
@@ -71,6 +103,17 @@ function getKoreanDateString() {
 }
 
 /**
+ * 현재 한국 표준시(KST) 날짜를 'YYYY-MM' 형식의 문자열로 반환합니다.
+ * @returns {string} 'YYYY-MM' 형식의 한국 날짜 문자열
+ */
+function getKoreanYearMonthString() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+    const kstDate = new Date(utc + (9 * 60 * 60 * 1000));
+    return kstDate.toISOString().slice(0, 7);
+}
+
+/**
  * 화면에 거래 내역 렌더링
  * @param {object} transactions - Firebase에서 가져온 거래 내역 객체
  */
@@ -83,8 +126,20 @@ function renderTransactions(transactions) {
         return;
     }
 
-    // Firebase에서 받은 객체를 순회
-    Object.keys(transactions).forEach(key => {
+    // 날짜순으로 정렬 (최신 날짜가 위로)
+    const sortedTransactionKeys = Object.keys(transactions).sort((a, b) => {
+        const dateA = new Date(transactions[a].date);
+        const dateB = new Date(transactions[b].date);
+        return dateB - dateA;
+    });
+
+    if (sortedTransactionKeys.length === 0) {
+        transactionList.innerHTML = '<tr><td colspan="5">해당 기간의 거래 내역이 없습니다.</td></tr>';
+        return;
+    }
+
+    // 정렬된 키를 기반으로 순회
+    sortedTransactionKeys.forEach(key => {
         const transaction = transactions[key];
         const row = document.createElement('tr');
         
@@ -122,19 +177,20 @@ function renderAssets(assets) {
 
         // 자산 현황 목록에 아이템 추가
         const li = document.createElement('li');
-        let detailsHtml = '';
+        let typeText = (paymentMethod.type === 'credit_card') ? '신용카드' : '계좌';
+        let pendingAmountHtml = '';
         let balanceHtml = '';
 
         if (paymentMethod.type === 'credit_card') {
-            detailsHtml = `<span class="asset-details">(결제예정: ${Number(paymentMethod.pendingAmount || 0).toLocaleString()}원)</span>`;
+            pendingAmountHtml = `<span class="asset-details">(결제예정: ${Number(paymentMethod.pendingAmount || 0).toLocaleString()}원)</span>`;
             balanceHtml = `한도: ${Number(paymentMethod.balance).toLocaleString()}원`;
         } else { // account
             balanceHtml = `${Number(paymentMethod.balance).toLocaleString()}원`;
         }
 
         li.innerHTML = `<div>
-            <span class="asset-name" data-id="${key}">${paymentMethod.name}</span>
-            ${detailsHtml}
+            <span class="asset-name" data-id="${key}">${paymentMethod.name}</span> <span class="asset-details">(${typeText})</span>
+            ${pendingAmountHtml}
             </div>
             <span class="asset-balance">${balanceHtml}</span>`;
         assetList.appendChild(li);
@@ -146,11 +202,13 @@ function renderAssets(assets) {
         assetSelect.appendChild(option);
 
         // 자산 유형이 '계좌'인 경우, '연동 계좌' 드롭다운에도 추가
-        if (paymentMethod.type === 'account') {
+        // 자산 유형이 '계좌'이거나, 유형이 지정되지 않은 경우(구 데이터 호환) '연동 계좌' 드롭다운에 추가
+        if (paymentMethod.type === 'account' || paymentMethod.type === undefined) {
             const accountOption = document.createElement('option');
             accountOption.value = key;
             accountOption.textContent = paymentMethod.name;
-            linkedAccountSelect.appendChild(accountOption);
+            linkedAccountSelect.appendChild(accountOption.cloneNode(true)); // 생성 폼용
+            editLinkedAccountSelect.appendChild(accountOption.cloneNode(true)); // 수정 폼용
         }
     });
 }
@@ -163,12 +221,26 @@ function openAssetEditModal(assetId) {
     const assetRef = ref(database, `assets/${assetId}`);
     get(assetRef).then(snapshot => {
         if (snapshot.exists()) {
-            const { name, balance } = snapshot.val();
+            const asset = snapshot.val();
+            const { name, balance, type, paymentDay, linkedAccountId } = asset;
+
             assetEditModal.style.display = 'flex';
             editAssetNameInput.value = name;
             editAssetBalanceInput.value = balance;
+            // type이 없는 구 데이터는 'account'로 처리
+            editAssetTypeInput.value = type || 'account';
+
             assetEditForm.dataset.id = assetId; // 수정/삭제 시 사용할 ID 저장
             deleteAssetBtn.dataset.id = assetId; // 수정/삭제 시 사용할 ID 저장
+
+            // 신용카드 필드 처리
+            if (editAssetTypeInput.value === 'credit_card') {
+                editCreditCardFields.style.display = 'flex';
+                editPaymentDayInput.value = paymentDay || '';
+                editLinkedAccountSelect.value = linkedAccountId || '';
+            } else {
+                editCreditCardFields.style.display = 'none';
+            }
         }
     });
 }
@@ -178,6 +250,61 @@ function openAssetEditModal(assetId) {
  */
 function closeAssetEditModal() {
     assetEditModal.style.display = 'none';
+}
+
+/**
+ * 카테고리 관리 목록을 화면에 렌더링
+ * @param {object} categories - Firebase에서 가져온 카테고리 객체
+ */
+function renderCategoryLists(categories) {
+    incomeCategoryListEl.innerHTML = '';
+    expenseCategoryListEl.innerHTML = '';
+
+    // 전역 변수 업데이트
+    incomeCategories = categories.income ? Object.values(categories.income) : [];
+    expenseCategories = categories.expense ? Object.values(categories.expense) : [];
+
+    // 수입 카테고리 렌더링
+    if (categories.income) {
+        Object.entries(categories.income).forEach(([key, name]) => {
+            const categorySpan = document.createElement('span');
+            categorySpan.className = 'category-item';
+            categorySpan.innerHTML = `${name} <button class="delete-btn" data-id="${key}" data-type="income" style="padding: 2px 5px; font-size: 0.8em;">&times;</button>`;
+            incomeCategoryListEl.appendChild(categorySpan);
+        });
+    }
+
+    // 지출 카테고리 렌더링
+    if (categories.expense) {
+        Object.entries(categories.expense).forEach(([key, name]) => {
+            const categorySpan = document.createElement('span');
+            categorySpan.className = 'category-item';
+            categorySpan.innerHTML = `${name} <button class="delete-btn" data-id="${key}" data-type="expense" style="padding: 2px 5px; font-size: 0.8em;">&times;</button>`;
+            expenseCategoryListEl.appendChild(categorySpan);
+        });
+    }
+
+    // 거래 내역 폼의 카테고리 드롭다운도 업데이트
+    updateCategoryOptions();
+}
+
+/**
+ * 새 카테고리 추가
+ * @param {Event} e - 폼 제출 이벤트
+ */
+function addCategory(e) {
+    e.preventDefault();
+    const name = categoryNameInput.value.trim();
+    const type = categoryTypeInput.value;
+
+    if (!name) {
+        alert('카테고리 이름을 입력해주세요.');
+        return;
+    }
+
+    const categoryListRef = ref(database, `categories/${type}`);
+    push(categoryListRef, name);
+    categoryForm.reset();
 }
 
 /**
@@ -316,46 +443,43 @@ function updateAsset(e) {
     e.preventDefault();
     const assetId = e.target.dataset.id;
     const newName = editAssetNameInput.value.trim();
-    const newBalanceValue = editAssetBalanceInput.value;
-    
-    const newBalance = Number(newBalanceValue);
+    const newBalance = Number(editAssetBalanceInput.value);
+    const newType = editAssetTypeInput.value;
+
     const assetRef = ref(database, `assets/${assetId}`);
 
-    // 1. 기존 자산 정보를 가져와서 금액 변동을 계산
-    get(assetRef).then(snapshot => {
-        if (!snapshot.exists()) return;
-        
-        const currentAsset = snapshot.val();
+    let updatedAssetData = {
+        name: newName,
+        balance: newBalance,
+        type: newType
+    };
 
-        // 신용카드의 경우 '결제 예정 금액'은 직접 수정하지 않음 (거래 내역 기반)
-        if (currentAsset.type === 'credit_card') {
-            // 한도만 수정
-            update(assetRef, { name: newName, balance: newBalance });
-        } else { // 계좌의 경우
-            const currentBalance = currentAsset.balance;
-            const balanceDifference = newBalance - currentBalance;
-
-            // 2. 자산 이름과 최종 잔액 업데이트
-            update(assetRef, { name: newName, balance: newBalance });
-
-            // 3. 금액에 변동이 있을 경우 '잔액 조정' 거래 내역 자동 생성
-            if (balanceDifference !== 0) {
-                const adjustmentTransaction = {
-                    date: getKoreanDateString(),
-                    type: balanceDifference > 0 ? 'income' : 'expense',
-                    category: '잔액 조정',
-                    amount: Math.abs(balanceDifference),
-                    assetId: assetId,
-                };
-                push(transactionsRef, adjustmentTransaction);
-            }
+    if (newType === 'credit_card') {
+        const paymentDay = +editPaymentDayInput.value;
+        const linkedAccountId = editLinkedAccountSelect.value;
+        if (!paymentDay || !linkedAccountId) {
+            alert('신용카드는 결제일과 연동 계좌를 모두 선택해야 합니다.');
+            return;
         }
-        closeAssetEditModal();
+        updatedAssetData.paymentDay = paymentDay;
+        updatedAssetData.linkedAccountId = linkedAccountId;
+        // 만약 계좌 -> 신용카드로 변경하는 경우, pendingAmount 필드 추가
+        get(assetRef).then(snapshot => {
+            if (snapshot.exists() && snapshot.val().type !== 'credit_card') {
+                updatedAssetData.pendingAmount = 0;
+            }
+            update(assetRef, updatedAssetData);
+        });
+    } else { // 계좌로 변경하는 경우, 신용카드 관련 필드 제거
+        updatedAssetData.paymentDay = null;
+        updatedAssetData.linkedAccountId = null;
+        updatedAssetData.pendingAmount = null;
+        update(assetRef, updatedAssetData);
+    }
 
-    }).catch(error => {
-        console.error("자산 수정 중 오류 발생:", error);
-        alert("자산 정보를 수정하는 데 실패했습니다.");
-    });
+    // 참고: 잔액 조정 로직은 단순화를 위해 이번 수정에서는 제외했습니다.
+    // 필요하다면 이전 코드처럼 추가할 수 있습니다.
+    closeAssetEditModal();
 }
 
 /**
@@ -377,6 +501,36 @@ async function deleteAsset() {
     // 2. 연결된 거래 내역이 없으면 자산 삭제
     await remove(ref(database, `assets/${assetId}`));
     closeAssetEditModal();
+}
+
+/**
+ * 카테고리 삭제
+ * @param {Event} e - 클릭 이벤트
+ */
+async function deleteCategory(e) {
+    if (!e.target.classList.contains('delete-btn') || !e.target.dataset.id || !e.target.dataset.type) return;
+
+    const categoryId = e.target.dataset.id;
+    const categoryType = e.target.dataset.type;
+    const categoryRef = ref(database, `categories/${categoryType}/${categoryId}`);
+
+    // 1. 삭제할 카테고리 이름 가져오기
+    const categorySnapshot = await get(categoryRef);
+    if (!categorySnapshot.exists()) return;
+    const categoryName = categorySnapshot.val();
+
+    if (!confirm(`'${categoryName}' 카테고리를 삭제하시겠습니까?\n이 카테고리를 사용하는 거래 내역이 있으면 삭제할 수 없습니다.`)) return;
+
+    // 2. 해당 카테고리를 사용하는 거래 내역이 있는지 확인
+    const transactionsQuery = query(transactionsRef, orderByChild('category'), equalTo(categoryName));
+    const snapshot = await get(transactionsQuery);
+
+    if (snapshot.exists()) {
+        alert("이 카테고리를 사용하는 거래 내역이 있어 삭제할 수 없습니다.");
+        return;
+    }
+    // 3. 연결된 거래 내역이 없으면 카테고리 삭제
+    await remove(categoryRef);
 }
 
 /**
@@ -418,11 +572,244 @@ function deleteTransaction(e) {
 }
 
 /**
+ * 거래 내역 데이터를 CSV 파일로 내보내는 함수
+ */
+async function exportToCSV() {
+    try {
+        const [transactionsSnapshot, assetsSnapshot] = await Promise.all([
+            get(transactionsRef),
+            get(assetsRef)
+        ]);
+
+        if (!transactionsSnapshot.exists()) {
+            alert('내보낼 거래 내역이 없습니다.');
+            return;
+        }
+
+        const transactions = transactionsSnapshot.val();
+        const assets = assetsSnapshot.val() || {};
+
+        // assetId를 assetName으로 변환하기 위한 맵 생성
+        const assetIdToNameMap = Object.keys(assets).reduce((map, key) => {
+            map[key] = assets[key].name;
+            return map;
+        }, {});
+
+        // CSV 헤더
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "날짜,항목,카테고리,금액,결제수단\r\n";
+
+        // CSV 데이터 행
+        Object.values(transactions).forEach(tx => {
+            const row = [
+                tx.date,
+                tx.type === 'income' ? '수입' : '지출',
+                tx.category,
+                tx.amount,
+                assetIdToNameMap[tx.assetId] || '알 수 없음' // 자산이 삭제된 경우 대비
+            ];
+            csvContent += row.join(",") + "\r\n";
+        });
+
+        // 파일 다운로드
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `가계부_거래내역_${getKoreanDateString()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+    } catch (error) {
+        console.error("CSV 내보내기 중 오류 발생:", error);
+        alert("데이터를 내보내는 중 오류가 발생했습니다.");
+    }
+}
+
+/**
+ * CSV 파일을 읽어 거래 내역을 가져오는 함수
+ * @param {Event} e - 파일 입력 변경 이벤트
+ */
+async function importFromCSV(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm("CSV 파일의 모든 내역을 데이터베이스에 추가하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
+        importCsvInput.value = ''; // 파일 선택 취소
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        const csvData = event.target.result;
+        const lines = csvData.split(/\r\n|\n/).slice(1); // 헤더 제외
+
+        const assetsSnapshot = await get(assetsRef);
+        const assets = assetsSnapshot.val() || {};
+        const assetNameToIdMap = Object.keys(assets).reduce((map, key) => {
+            map[assets[key].name] = key;
+            return map;
+        }, {});
+
+        lines.forEach(line => {
+            if (!line) return;
+            const [date, type, category, amount, assetName] = line.split(',');
+            
+            const assetId = assetNameToIdMap[assetName];
+            if (!assetId) {
+                console.warn(`'${assetName}'에 해당하는 자산을 찾을 수 없어 다음 거래를 건너뜁니다:`, line);
+                return;
+            }
+
+            // addTransaction 함수를 재사용하지 않고 직접 push (잔액 계산 중복 방지)
+            push(transactionsRef, { date, type: type === '수입' ? 'income' : 'expense', category, amount: +amount, assetId });
+        });
+        alert('가져오기가 완료되었습니다. 페이지가 새로고침될 수 있습니다.');
+    };
+    reader.readAsText(file, 'UTF-8');
+}
+
+/**
+ * 선택된 월의 총수입, 총지출, 순수익을 계산하고 화면에 표시하는 함수
+ */
+function updateSummary() {
+    const selectedMonth = statsMonthInput.value;
+    if (!selectedMonth) return;
+
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    Object.values(allTransactions).forEach(tx => {
+        // 선택된 월의 내역만 필터링
+        if (tx.date.startsWith(selectedMonth)) {
+            if (tx.type === 'income') {
+                totalIncome += tx.amount;
+            } else if (tx.type === 'expense') {
+                totalExpense += tx.amount;
+            }
+        }
+    });
+
+    const netIncome = totalIncome - totalExpense;
+
+    summaryIncomeEl.textContent = `${totalIncome.toLocaleString()}원`;
+    summaryExpenseEl.textContent = `${totalExpense.toLocaleString()}원`;
+    summaryNetEl.textContent = `${netIncome.toLocaleString()}원`;
+
+    // 순수익에 따라 색상 변경
+    if (netIncome > 0) {
+        summaryNetEl.style.color = 'var(--income-color)';
+    } else if (netIncome < 0) {
+        summaryNetEl.style.color = 'var(--expense-color)';
+    } else {
+        summaryNetEl.style.color = '#333';
+    }
+}
+
+/**
+ * 선택된 월의 카테고리별 지출 데이터를 기반으로 차트를 업데이트하는 함수
+ */
+function updateChart() {
+    const selectedMonth = statsMonthInput.value;
+    if (!selectedMonth) return;
+
+    const expenseData = {};
+
+    Object.values(allTransactions).forEach(tx => {
+        // 선택된 월의 지출 내역만 필터링
+        if (tx.type === 'expense' && tx.date.startsWith(selectedMonth)) {
+            if (expenseData[tx.category]) {
+                expenseData[tx.category] += tx.amount;
+            } else {
+                expenseData[tx.category] = tx.amount;
+            }
+        }
+    });
+
+    const labels = Object.keys(expenseData);
+    const data = Object.values(expenseData);
+
+    // 기존 차트가 있으면 파괴
+    if (expenseChart) {
+        expenseChart.destroy();
+    }
+
+    // 새 차트 생성
+    expenseChart = new Chart(expenseChartCanvas, {
+        type: 'pie', // 파이 차트
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '카테고리별 지출',
+                data: data,
+                backgroundColor: [ // 다양한 색상 배열
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40',
+                    '#FFCD56', '#C9CBCF', '#3FC380', '#FA6E59', '#A2D0EA', '#F9D423'
+                ],
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: `${selectedMonth}월 지출 내역`
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed !== null) {
+                                label += new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(context.parsed);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * 기간별 거래 내역을 필터링하는 함수
+ */
+function filterTransactionsByDate() {
+    const startDate = filterStartDateInput.value;
+    const endDate = filterEndDateInput.value;
+
+    if (!startDate || !endDate) {
+        alert('시작일과 종료일을 모두 선택해주세요.');
+        return;
+    }
+
+    const filteredTransactions = Object.entries(allTransactions)
+        .filter(([key, tx]) => {
+            return tx.date >= startDate && tx.date <= endDate;
+        })
+        .reduce((obj, [key, tx]) => {
+            obj[key] = tx;
+            return obj;
+        }, {});
+
+    renderTransactions(filteredTransactions);
+}
+
+
+/**
  * 초기화 함수
  */
 function init() {
     // 오늘 날짜를 기본값으로 설정
     dateInput.value = getKoreanDateString();
+    statsMonthInput.value = getKoreanYearMonthString(); // 통계 월 기본값 설정
     
     // 이벤트 리스너 등록
     assetForm.addEventListener('submit', addAsset);
@@ -438,6 +825,12 @@ function init() {
             openAssetEditModal(e.target.dataset.id);
         }
     });
+    editAssetTypeInput.addEventListener('change', (e) => {
+        // 수정 모달에서 신용카드 선택 시 추가 필드 표시/숨김
+        editCreditCardFields.style.display = e.target.value === 'credit_card' ? 'flex' : 'none';
+    });
+    categoryForm.addEventListener('submit', addCategory);
+    document.addEventListener('click', deleteCategory); // 이벤트 위임으로 카테고리 삭제 처리
     assetEditForm.addEventListener('submit', updateAsset);
     deleteAssetBtn.addEventListener('click', deleteAsset);
     closeModalBtn.addEventListener('click', closeAssetEditModal);
@@ -446,11 +839,25 @@ function init() {
             closeAssetEditModal();
         }
     });
+    exportCsvBtn.addEventListener('click', exportToCSV);
+    importCsvInput.addEventListener('change', importFromCSV);
+    statsMonthInput.addEventListener('change', () => {
+        updateChart();
+        updateSummary();
+    });
+    filterBtn.addEventListener('click', filterTransactionsByDate);
+    resetFilterBtn.addEventListener('click', () => {
+        filterStartDateInput.value = '';
+        filterEndDateInput.value = '';
+        renderTransactions(allTransactions); // 전체 목록 다시 렌더링
+    });
 
     // Firebase 데이터베이스의 변경사항을 실시간으로 감지
     onValue(transactionsRef, (snapshot) => {
-        const data = snapshot.val();
-        renderTransactions(data);
+        allTransactions = snapshot.val() || {};
+        renderTransactions(allTransactions); // 초기 로드 시 전체 목록 렌더링
+        updateChart(); // 거래 내역 변경 시 차트와 요약 업데이트
+        updateSummary();
     });
 
     // 자산 데이터 변경 감지
@@ -459,8 +866,11 @@ function init() {
         renderAssets(data);
     });
 
-    // 페이지 로드 시 초기 카테고리 옵션 설정
-    updateCategoryOptions();
+    // 카테고리 데이터 변경 감지
+    onValue(categoriesRef, (snapshot) => {
+        const data = snapshot.val() || { income: {}, expense: {} };
+        renderCategoryLists(data);
+    });
 
     // 매일 자정에 카드값 자동 결제 로직 실행 (실제 앱에서는 서버 기능 필요)
     // 여기서는 페이지 로드 시 오늘 날짜가 결제일인 카드를 찾아 처리하는 방식으로 간소화

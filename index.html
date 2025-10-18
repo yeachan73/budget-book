@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>간단 가계부</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -39,6 +40,19 @@
         </form>
 
         <h2>거래 내역</h2>
+        <div class="filter-container">
+            <div class="form-control">
+                <label for="filter-start-date">시작일</label>
+                <input type="date" id="filter-start-date">
+            </div>
+            <div class="form-control">
+                <label for="filter-end-date">종료일</label>
+                <input type="date" id="filter-end-date">
+            </div>
+            <button id="filter-btn" class="btn filter-btn">조회</button>
+            <button id="reset-filter-btn" class="btn filter-btn">초기화</button>
+        </div>
+
         <table id="transaction-table">
             <thead>
                 <tr>
@@ -53,6 +67,48 @@
                 <!-- 자바스크립트로 내역이 추가됩니다 -->
             </tbody>
         </table>
+
+        <h2>월별 지출 통계</h2>
+        <div class="stats-container">
+            <div class="form-control">
+                <label for="stats-month">월 선택</label>
+                <input type="month" id="stats-month">
+            </div>
+            <div id="monthly-summary" class="summary-box">
+                <div>
+                    <span>총수입</span>
+                    <span id="summary-income">0원</span>
+                </div>
+                <div>
+                    <span>총지출</span>
+                    <span id="summary-expense">0원</span>
+                </div>
+                <div>
+                    <span>순수익</span>
+                    <span id="summary-net">0원</span>
+                </div>
+            </div>
+            <canvas id="expense-chart"></canvas>
+        </div>
+
+        <h2>카테고리 관리</h2>
+        <form id="category-form">
+            <div class="form-control">
+                <label for="category-name">카테고리 이름</label>
+                <input type="text" id="category-name" placeholder="예: 식비, 교통비" required>
+            </div>
+            <div class="form-control">
+                <label for="category-type">항목</label>
+                <select id="category-type">
+                    <option value="expense">지출</option>
+                    <option value="income">수입</option>
+                </select>
+            </div>
+            <button class="btn">카테고리 추가</button>
+        </form>
+        <h3>카테고리 목록</h3>
+        <p><strong>지출:</strong> <span id="expense-category-list"></span></p>
+        <p><strong>수입:</strong> <span id="income-category-list"></span></p>
 
         <h2>결제 수단 관리</h2>
         <form id="asset-form">
@@ -81,6 +137,15 @@
         </form>
         <h3>결제 수단 현황</h3>
         <ul id="asset-list"></ul>
+
+        <h2>데이터 관리</h2>
+        <div class="data-management">
+            <button id="export-csv-btn" class="btn">거래 내역 CSV로 내보내기</button>
+            <div class="form-control">
+                <label for="import-csv-input">거래 내역 CSV 파일 가져오기</label>
+                <input type="file" id="import-csv-input" accept=".csv">
+            </div>
+        </div>
     </div>
 
     <!-- 자산 수정/삭제 모달 -->
@@ -91,6 +156,19 @@
                 <div class="form-control">
                     <label for="edit-asset-name">결제 수단 이름</label>
                     <input type="text" id="edit-asset-name" required>
+                </div>
+                <div class="form-control">
+                    <label for="edit-asset-type">유형</label>
+                    <select id="edit-asset-type">
+                        <option value="account">계좌 (체크카드/현금)</option>
+                        <option value="credit_card">신용카드</option>
+                    </select>
+                </div>
+                <div id="edit-credit-card-fields" class="form-control" style="display: none;">
+                    <label for="edit-payment-day">결제일 (1-31일)</label>
+                    <input type="number" id="edit-payment-day" min="1" max="31">
+                    <label for="edit-linked-account-select">연동 계좌</label>
+                    <select id="edit-linked-account-select"></select>
                 </div>
                 <div class="form-control">
                     <label for="edit-asset-balance">잔액/한도</label>

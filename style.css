@@ -93,6 +93,18 @@ select {
     background-color: #2980b9;
 }
 
+/* 거래 내역 필터 */
+.filter-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto auto;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: end;
+}
+
+.filter-container .filter-btn {
+    grid-column: auto; /* 버튼이 한 칸만 차지하도록 설정 */
+}
 /* 테이블 스타일 */
 #transaction-table {
     width: 100%;
@@ -171,6 +183,59 @@ select {
     text-decoration: underline;
 }
 
+/* 통계 섹션 */
+.stats-container {
+    margin-bottom: 30px;
+}
+
+#expense-chart {
+    max-width: 100%;
+    margin-top: 20px;
+}
+
+/* 월별 요약 박스 */
+.summary-box {
+    display: flex;
+    justify-content: space-around;
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.summary-box > div {
+    text-align: center;
+}
+
+.summary-box span:first-child {
+    display: block;
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.summary-box span:last-child {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+#summary-income { color: var(--income-color); }
+#summary-expense { color: var(--expense-color); }
+
+/* 데이터 관리 섹션 */
+.data-management {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.data-management .btn { grid-column: auto; }
+
 /* 모달 스타일 */
 .modal-overlay {
     position: fixed;
@@ -213,4 +278,27 @@ select {
     border: none;
     background: none;
     cursor: pointer;
+}
+
+/* 카테고리 관리 */
+#category-form {
+    display: grid;
+    grid-template-columns: 2fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 20px;
+}
+
+#category-form .btn {
+    grid-column: auto;
+}
+
+.category-item {
+    display: inline-block;
+    background-color: #eee;
+    padding: 5px 10px;
+    border-radius: 15px;
+    margin: 3px;
+    font-size: 0.9em;
+}
 }
