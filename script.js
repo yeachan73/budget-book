@@ -123,8 +123,13 @@ async function displayAppVersion() {
     const GITHUB_REPONAME = 'budget-book'; // 👈 본인의 GitHub 저장소 이름으로 변경하세요.
     const BRANCH_NAME = 'main'; // 또는 'master' 등 주 브랜치 이름
 
+    // ⚠️ 주의: 이 방법은 토큰이 외부에 노출될 수 있어 보안에 취약합니다.
+    // const GITHUB_TOKEN = '여기에_복사한_토큰을_붙여넣으세요';
+
     try {
-        const response = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPONAME}/commits/${BRANCH_NAME}`);
+        const response = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPONAME}/commits/${BRANCH_NAME}`, {
+            // headers: { 'Authorization': `token ${GITHUB_TOKEN}` } // 비공개 저장소일 경우 이 줄의 주석을 해제하세요.
+        });
         if (!response.ok) {
             throw new Error(`GitHub API Error: ${response.status}`);
         }
